@@ -1,0 +1,42 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MemberStatus {
+  AKTIF
+  TIDAK_AKTIF
+  DITURUNKAN
+  TIDAK_DIKETAHUI
+}
+
+model Position {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  members   Member[]
+
+  @@map("positions")
+}
+
+model Member {
+  id         Int          @id @default(autoincrement())
+  name       String
+  positionId Int          @map("position_id")
+  position   Position     @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  hex        String?      @unique
+  discordId  String?      @unique @map("discord_id")
+  status     MemberStatus @default(TIDAK_DIKETAHUI)
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([positionId])
+  @@map("members")
+}

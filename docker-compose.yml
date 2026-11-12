@@ -1,0 +1,62 @@
+name: central-t
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: central-t-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - central_t_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    container_name: central-t-app
+    restart: unless-stopped
+    profiles: ["app"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
+    ports:
+      - "3000:3000"
+
+  bot:
+    build: ./bot
+    container_name: central-t-bot
+    restart: unless-stopped
+    profiles: ["app"]
+    depends_on:
+      - app
+    environment:
+      API_URL: http://app:3000
+      DISCORD_TOKEN: ${DISCORD_TOKEN}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID}
+      STRUKTUR_CHANNEL_ID: ${STRUKTUR_CHANNEL_ID}
+      LOG_CHANNEL_ID: ${LOG_CHANNEL_ID:-}
+      ALLOWED_ROLE_IDS: ${ALLOWED_ROLE_IDS:-}
+      ALLOWED_USER_IDS: ${ALLOWED_USER_IDS:-}
+
+  adminer:
+    image: adminer
+    container_name: central-t-adminer
+    restart: unless-stopped
+    profiles: ["tools"]
+    depends_on:
+      - db
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  central_t_pgdata:
