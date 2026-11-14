@@ -9,7 +9,10 @@ const MAX_MESSAGE_CHARS = 5500;
 const MAX_EMBEDS_PER_MESSAGE = 10;
 
 function memberLine(m) {
-  return `${STATUS[m.status].emoji} **${escapeMd(m.name)}**${m.hex ? ` — \`${m.hex}\`` : ""}`;
+  const parts = [`${STATUS[m.status].emoji} **${escapeMd(m.name)}**`];
+  if (m.hex) parts.push(`\`${m.hex}\``);
+  if (m.discordId) parts.push(`\`${m.discordId}\``);
+  return parts.join(" — ");
 }
 
 function chunkLines(lines, max) {

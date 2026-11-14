@@ -9,6 +9,8 @@ import {
 import { api, describeError, UserError } from "./api.js";
 import { CONTEXT_ADD_NAME, commands } from "./commands.js";
 import { handleAddButton, handleContextAdd } from "./tambah.js";
+import { buildDeleteConfirm, handleDeleteButton } from "./hapus.js";
+import { handleRegistrationMessage } from "./daftar.js";
 import { STATUS, escapeMd } from "./format.js";
 import { refreshStruktur, structureLink } from "./struktur.js";
 
@@ -26,13 +28,35 @@ const ALLOWED_USERS = csv(process.env.ALLOWED_USER_IDS);
 const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID || null;
 const REFRESH_MS = 5 * 60_000;
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+// Channel pendaftaran otomatis: pesan berformat langsung masuk database.
+const DAFTAR_CHANNEL_ID = process.env.DAFTAR_CHANNEL_ID || null;
+
+// Catatan: field `flags` di /applications/@me tidak bisa diandalkan untuk intent ini
+// (pernah dilaporkan "limited" padahal sudah aktif dan gateway menerima). Jadi selama
+// DAFTAR_CHANNEL_ID diisi, kita minta intent-nya; kalau Discord menolak, error-nya jelas.
+const intents = [GatewayIntentBits.Guilds];
+if (DAFTAR_CHANNEL_ID) {
+  intents.push(GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent);
+  console.log(`[daftar] auto-daftar aktif di channel ${DAFTAR_CHANNEL_ID}`);
+}
+
+const client = new Client({ intents });
 
 function isAllowed(interaction) {
   if (ALLOWED_USERS.includes(interaction.user.id)) return true;
   const perms = interaction.memberPermissions;
   if (perms?.has(PermissionFlagsBits.Administrator) || perms?.has(PermissionFlagsBits.ManageGuild)) return true;
   const roles = interaction.member?.roles?.cache;
+  return Boolean(roles && ALLOWED_ROLES.some((id) => roles.has(id)));
+}
+
+/** Versi isAllowed untuk objek GuildMember (dipakai alur baca pesan channel). */
+function isAllowedMember(member) {
+  if (!member) return false;
+  if (ALLOWED_USERS.includes(member.id)) return true;
+  const perms = member.permissions;
+  if (perms?.has(PermissionFlagsBits.Administrator) || perms?.has(PermissionFlagsBits.ManageGuild)) return true;
+  const roles = member.roles?.cache;
   return Boolean(roles && ALLOWED_ROLES.some((id) => roles.has(id)));
 }
 
@@ -138,6 +162,48 @@ async function handleAnggota(interaction) {
     return { reply: { embeds: [memberEmbed(data, "Anggota ditambahkan")] } };
   }
 
+  if (sub === "ubah") {
+    const id = await resolveMemberId(interaction.options.getString("nama", true));
+    const body = {};
+    const namaBaru = interaction.options.getString("nama_baru");
+    const hex = interaction.options.getString("hex");
+    const discord = interaction.options.getString("discord");
+    const status = interaction.options.getString("status");
+
+    if (namaBaru !== null) body.name = namaBaru;
+    if (hex !== null) body.hex = hex.trim() === "-" ? null : hex;
+    if (discord !== null) body.discordId = discord.trim() === "-" ? null : discord;
+    if (status !== null) body.status = status;
+
+    if (Object.keys(body).length === 0) {
+      throw new UserError("Isi minimal satu kolom yang mau diubah: nama_baru, hex, discord, atau status.");
+    }
+    const { data } = await api(`/api/members/${id}`, { method: "PATCH", body });
+    await sendLog(interaction, `✏️ **${escapeMd(data.name)}** diperbarui`);
+    return { reply: { embeds: [memberEmbed(data, "Data anggota diperbarui")] } };
+  }
+
+  if (sub === "pindah") {
+    const id = await resolveMemberId(interaction.options.getString("nama", true));
+    const positionId = await resolvePositionId(interaction.options.getString("jabatan", true));
+    const before = (await api(`/api/members/${id}`)).data;
+    if (before.position.id === positionId) {
+      throw new UserError(`"${before.name}" sudah di jabatan ${before.position.name}.`);
+    }
+    const { data } = await api(`/api/members/${id}`, { method: "PATCH", body: { positionId } });
+    await sendLog(
+      interaction,
+      `↔️ **${escapeMd(data.name)}** pindah dari **${before.position.name}** ke **${data.position.name}** (status ${data.status})`,
+    );
+    return { reply: { embeds: [memberEmbed(data, `${data.name} → ${data.position.name}`)] } };
+  }
+
+  if (sub === "hapus") {
+    const id = await resolveMemberId(interaction.options.getString("nama", true));
+    const { data } = await api(`/api/members/${id}`);
+    return { reply: buildDeleteConfirm(interaction, data) };
+  }
+
   const id = await resolveMemberId(interaction.options.getString("nama", true));
 
   if (sub === "naik" || sub === "turun") {
@@ -193,11 +259,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     if (interaction.isButton()) {
-      if (!/^addx?\|/.test(interaction.customId)) return;
+      const isAdd = /^addx?\|/.test(interaction.customId);
+      const isDelete = /^delx?\|/.test(interaction.customId);
+      if (!isAdd && !isDelete) return;
       if (!isAllowed(interaction)) {
         return interaction.reply({
           content: "⛔ Kamu tidak punya izin.",
           flags: MessageFlags.Ephemeral,
+        });
+      }
+      if (isDelete) {
+        return await handleDeleteButton(interaction, {
+          sendLog,
+          refreshStruktur: () => refreshStruktur(client),
         });
       }
       return await handleAddButton(interaction, {
@@ -216,8 +290,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
       });
     }
 
-    const isRead = interaction.commandName === "anggota" && interaction.options.getSubcommand() === "cari";
-    await interaction.deferReply(isRead ? { flags: MessageFlags.Ephemeral } : {});
+    const sub = interaction.commandName === "anggota" ? interaction.options.getSubcommand() : null;
+    // cari & hapus bersifat privat (ephemeral); command lain tampil di channel.
+    const isPrivate = sub === "cari" || sub === "hapus";
+    await interaction.deferReply(isPrivate ? { flags: MessageFlags.Ephemeral } : {});
 
     let result;
     if (interaction.commandName === "struktur") {
@@ -280,18 +356,49 @@ async function handleAutocomplete(interaction) {
 
 client.once(Events.ClientReady, async (c) => {
   console.log(`[bot] login sebagai ${c.user.tag}`);
-  try {
-    const guild = await c.guilds.fetch(DISCORD_GUILD_ID);
-    await guild.commands.set(commands);
-    console.log(`[bot] ${commands.length} command terdaftar di server "${guild.name}"`);
-  } catch (err) {
-    console.error("[bot] gagal mendaftarkan command:", err.message);
+  // Daftarkan command di SEMUA server yang diikuti bot, bukan cuma DISCORD_GUILD_ID,
+  // supaya command langsung muncul di server lain tanpa menunggu propagasi command global.
+  await c.guilds.fetch().catch(() => {});
+  const guilds = [...c.guilds.cache.values()];
+  for (const guild of guilds) {
+    try {
+      await guild.commands.set(commands);
+      console.log(`[bot] ${commands.length} command terdaftar di server "${guild.name}"`);
+    } catch (err) {
+      console.error(`[bot] gagal mendaftarkan command di "${guild.name}":`, err.message);
+    }
   }
+  console.log(`[bot] total ${guilds.length} server`);
   refreshStruktur(c, { force: true });
   setInterval(() => refreshStruktur(c), REFRESH_MS);
+});
+
+// Auto-daftar dari channel: pesan berformat NAMA LENGKAP / JABATAN / STEAM HEX / ID DISCORD
+// langsung disimpan ke database, lalu pesannya diberi reaksi ✅ (atau ⚠️ kalau ada yang dilewati).
+client.on(Events.MessageCreate, async (message) => {
+  if (!DAFTAR_CHANNEL_ID) return;
+  if (message.channelId !== DAFTAR_CHANNEL_ID) return;
+  try {
+    await handleRegistrationMessage(message, {
+      isAllowedMember,
+      refreshStruktur: () => refreshStruktur(client),
+    });
+  } catch (err) {
+    console.error("[daftar] error:", err.message ?? err);
+    await message.react("⚠️").catch(() => {});
+  }
 });
 
 client.on(Events.Error, (err) => console.error("[bot] error:", err.message));
 process.on("unhandledRejection", (err) => console.error("[bot] unhandledRejection:", err));
 
-client.login(DISCORD_TOKEN);
+client.login(DISCORD_TOKEN).catch((err) => {
+  console.error("[bot] gagal login:", err.message);
+  if (/disallowed|4014/i.test(String(err.message))) {
+    console.error(
+      "[bot] kemungkinan Message Content Intent dimatikan di Developer Portal " +
+        "(Applications -> Bot -> Privileged Gateway Intents).",
+    );
+  }
+  process.exit(1);
+});

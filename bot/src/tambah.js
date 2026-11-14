@@ -10,21 +10,37 @@ const pending = new Map();
 
 const FIELDS = {
   name: ["nama lengkap", "nama"],
+  nameBaru: ["nama baru"],
+  position: ["jabatan", "posisi"],
+  status: ["status"],
   hex: ["steam hex", "hex steam", "steam", "hex"],
   discord: ["id discord", "discord id", "id dc", "discord"],
 };
 
 const isEmpty = (v) => v === "" || /^[-–—_.]+$/.test(v);
-const blank = () => ({ name: null, hex: null, discord: null });
+const blank = () => ({
+  name: null,
+  nameBaru: null,
+  position: null,
+  status: null,
+  hex: null,
+  discord: null,
+});
 
 /**
- * Baca pesan berformat "NAMA LENGKAP : ..., STEAM HEX : ..., ID DISCORD : ...".
+ * Baca pesan berformat "NAMA LENGKAP : ..., JABATAN : ..., STEAM HEX : ..., ID DISCORD : ...".
  * Satu pesan boleh berisi banyak blok; blok baru dimulai saat sebuah kolom muncul untuk kedua kali.
  */
 export function parseRegistrations(text) {
   const blocks = [];
   let cur = blank();
-  const used = () => cur.name !== null || cur.hex !== null || cur.discord !== null;
+  const used = () =>
+    cur.name !== null ||
+    cur.nameBaru !== null ||
+    cur.position !== null ||
+    cur.status !== null ||
+    cur.hex !== null ||
+    cur.discord !== null;
 
   const clean = text.replace(/[`*~|]/g, "");
   for (const line of clean.split(/\r?\n/)) {
@@ -43,6 +59,9 @@ export function parseRegistrations(text) {
 
     if (isEmpty(value)) cur[field] = "";
     else if (field === "name") cur.name = value.replace(/\s+/g, " ");
+    else if (field === "nameBaru") cur.nameBaru = value.replace(/\s+/g, " ");
+    else if (field === "position") cur.position = value.replace(/\s+/g, " ");
+    else if (field === "status") cur.status = value;
     else if (field === "hex") {
       const hex = /(?:steam:)?[0-9a-f]{8,17}/i.exec(value);
       cur.hex = hex ? hex[0].toLowerCase() : value;
@@ -118,7 +137,7 @@ function sweep() {
 }
 
 /** Validasi satu blok hasil parser menjadi item siap simpan. */
-function buildItem(block, index, { author, single }) {
+export function buildItem(block, index, { author, single }) {
   const notes = [];
   if (!block.name) {
     return { error: `Blok ke-${index + 1}: NAMA LENGKAP kosong, dilewati.` };
@@ -153,7 +172,7 @@ function buildItem(block, index, { author, single }) {
     notes.push("⚠️ Hex kosong.");
   }
 
-  return { name: block.name, hex, discordId, notes };
+  return { name: block.name, position: block.position || null, hex, discordId, notes };
 }
 
 // ---------- handler ----------

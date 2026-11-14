@@ -63,5 +63,11 @@ export const commands = [
           o.setName("hex").setDescription("Steam Hex baru (kosongkan dengan tanda -)").setRequired(true),
         ),
     )
+    .addSubcommand((s) =>
+      s
+        .setName("hapus")
+        .setDescription("Hapus anggota (perlu konfirmasi)")
+        .addStringOption((o) => namaOption(o)),
+    )
     .toJSON(),
 ];

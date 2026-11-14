@@ -31,6 +31,8 @@ export function MemberForm({
   const [hex, setHex] = useState(member?.hex ?? "");
   const [discordId, setDiscordId] = useState(member?.discordId ?? "");
   const [status, setStatus] = useState<MemberStatus>(member?.status ?? "AKTIF");
+  const [statusTouched, setStatusTouched] = useState(false);
+  const [autoStatus, setAutoStatus] = useState<MemberStatus | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
@@ -39,6 +41,34 @@ export function MemberForm({
     status === "DITURUNKAN" &&
     member.status !== "DITURUNKAN" &&
     positionId === member.positionId;
+
+  // Pindah jabatan manual mengikuti aturan tombol naik/turun: turun -> Diturunkan,
+  // naik dari Diturunkan -> Aktif. Selama admin belum mengubah status sendiri.
+  function changePosition(nextId: number) {
+    setPositionId(nextId);
+    if (!member || statusTouched) return;
+
+    const from = positions.find((p) => p.id === member.positionId);
+    const to = positions.find((p) => p.id === nextId);
+    if (!from || !to) return;
+
+    if (nextId === member.positionId) {
+      setStatus(member.status);
+      setAutoStatus(null);
+    } else if (to.sortOrder > from.sortOrder) {
+      setStatus("DITURUNKAN");
+      setAutoStatus("DITURUNKAN");
+    } else if (to.sortOrder < from.sortOrder && status === "DITURUNKAN") {
+      setStatus("AKTIF");
+      setAutoStatus("AKTIF");
+    } else {
+      setAutoStatus(null);
+    }
+  }
+
+  const autoStatusLabel = autoStatus
+    ? STATUS_OPTIONS.find((s) => s.value === autoStatus)?.label
+    : undefined;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -78,7 +108,7 @@ export function MemberForm({
           <select
             className={inputClass}
             value={positionId}
-            onChange={(e) => setPositionId(Number(e.target.value))}
+            onChange={(e) => changePosition(Number(e.target.value))}
           >
             {positions.map((p) => (
               <option key={p.id} value={p.id}>
@@ -110,12 +140,22 @@ export function MemberForm({
         <Field
           label="Status"
           error={errors.status}
-          hint={willDemote ? "Jabatan akan otomatis turun satu tingkat." : undefined}
+          hint={
+            autoStatus
+              ? `Status otomatis disesuaikan menjadi "${autoStatusLabel}" karena jabatan berubah. Bisa diubah manual.`
+              : willDemote
+                ? "Jabatan akan otomatis turun satu tingkat."
+                : undefined
+          }
         >
           <select
             className={inputClass}
             value={status}
-            onChange={(e) => setStatus(e.target.value as MemberStatus)}
+            onChange={(e) => {
+              setStatusTouched(true);
+              setAutoStatus(null);
+              setStatus(e.target.value as MemberStatus);
+            }}
           >
             {STATUS_OPTIONS.map((s) => (
               <option key={s.value} value={s.value}>

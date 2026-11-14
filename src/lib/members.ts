@@ -98,6 +98,15 @@ async function assertPositionExists(id: number) {
   if (!p) fail({ positionId: "Jabatan tidak ditemukan" });
 }
 
+async function getPositionSortOrder(id: number) {
+  const p = await prisma.position.findUnique({
+    where: { id },
+    select: { id: true, sortOrder: true },
+  });
+  if (!p) fail({ positionId: "Jabatan tidak ditemukan" });
+  return p;
+}
+
 async function assertHexAvailable(hex: string | null, exceptId?: number) {
   if (!hex) return;
   const existing = await prisma.member.findFirst({
@@ -304,9 +313,30 @@ export async function updateMember(id: number, input: Record<string, unknown>) {
     throw new ApiError(400, "Tidak ada field yang diubah");
   }
 
-  if (typeof data.positionId === "number") await assertPositionExists(data.positionId);
+  let targetPosition: Awaited<ReturnType<typeof getPositionSortOrder>> | null = null;
+  if (typeof data.positionId === "number") {
+    targetPosition = await getPositionSortOrder(data.positionId);
+  }
   if (typeof data.hex === "string") await assertHexAvailable(data.hex, id);
   if (typeof data.discordId === "string") await assertDiscordIdAvailable(data.discordId, id);
+
+  // Pindah jabatan manual mengikuti aturan tombol naik/turun:
+  // - turun satu/lebih tingkat  -> status DITURUNKAN
+  // - naik dari DITURUNKAN      -> status AKTIF
+  // Status yang dikirim eksplisit selalu menang, jadi admin tetap bisa memilih sendiri.
+  if (targetPosition && !("status" in input)) {
+    const direction =
+      targetPosition.sortOrder > current.position.sortOrder
+        ? "down"
+        : targetPosition.sortOrder < current.position.sortOrder
+          ? "up"
+          : null;
+    if (direction === "down") {
+      data.status = MemberStatus.DITURUNKAN;
+    } else if (direction === "up" && current.status === MemberStatus.DITURUNKAN) {
+      data.status = MemberStatus.AKTIF;
+    }
+  }
 
   // Status berubah jadi DITURUNKAN tanpa jabatan dipilih manual -> otomatis turun satu tingkat.
   const becomesDemoted =
