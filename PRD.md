@@ -1,5 +1,9 @@
 # PRD - Central T
 
+> **Status implementasi — 14 Nov 2026: 99% selesai (belum ditutup).**
+> Fitur struktur & anggota di web maupun bot Discord sudah berjalan dan memakai satu database yang sama.
+> Rincian yang sudah selesai, sisa 1%, dan rencana modul berikutnya ada di `PROGRESS.md`.
+
 ## 1. Ringkasan
 **Central T** adalah web internal khusus admin untuk mengelola data anggota: nama, jabatan, Steam, Hex, dan status.
 Tanpa login (diasumsikan hanya diakses admin lewat jaringan lokal/privat).
