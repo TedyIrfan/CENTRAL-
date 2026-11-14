@@ -197,6 +197,7 @@ function serialize(r: WdRow) {
     returnNote: r.returnNote,
     lostReason: r.lostReason,
     status: r.status,
+    discordMessageId: r.discordMessageId,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
   };
@@ -210,6 +211,7 @@ export type WdListParams = {
   itemName?: string;
   from?: Date;
   to?: Date;
+  updatedAfter?: Date;
   page: number;
   pageSize: number;
 };
@@ -246,6 +248,14 @@ export function parseWdListParams(sp: URLSearchParams): WdListParams {
 
   if (result.from && result.to && result.from > result.to) errors.to = "Tanggal akhir harus setelah tanggal awal";
 
+  // Dipakai bot Discord untuk mengambil transaksi yang berubah sejak sinkronisasi terakhir.
+  const updatedAfter = sp.get("updatedAfter");
+  if (updatedAfter) {
+    const d = new Date(updatedAfter);
+    if (Number.isNaN(d.getTime())) errors.updatedAfter = "updatedAfter tidak valid (ISO 8601)";
+    else result.updatedAfter = d;
+  }
+
   const page = sp.get("page");
   if (page) {
     if (!/^\d+$/.test(page) || Number(page) < 1 || Number(page) > 1_000_000) errors.page = "page tidak valid";
@@ -263,10 +273,11 @@ export function parseWdListParams(sp: URLSearchParams): WdListParams {
   return result;
 }
 
-function buildWhere(p: Pick<WdListParams, "status" | "search" | "itemName" | "from" | "to">) {
+function buildWhere(p: Pick<WdListParams, "status" | "search" | "itemName" | "from" | "to" | "updatedAfter">) {
   const where: Prisma.WdRecordWhereInput = {};
   if (p.status) where.status = p.status as WdStatus;
   if (p.itemName) where.itemName = { contains: p.itemName, mode: "insensitive" };
+  if (p.updatedAfter) where.updatedAt = { gte: p.updatedAfter };
   if (p.from || p.to) {
     where.takenAt = {
       ...(p.from ? { gte: p.from } : {}),
@@ -465,7 +476,7 @@ export async function returnWd(id: number, input: Record<string, unknown>) {
       current.durabilityStart !== null &&
       durabilityReturn > current.durabilityStart
     ) {
-      errors.durabilityReturn = "Durab kembali tidak boleh lebih besar dari durab awal";
+      errors.durabilityReturn = "Durab kembali tidak boleh lebih besar dari durab awal (boleh sama)";
     }
   }
 
@@ -517,3 +528,25 @@ export async function deleteWd(id: number) {
   await prisma.wdRecord.delete({ where: { id } });
   return { id, code: row.code };
 }
+
+/**
+ * Simpan ID pesan kartu WD di channel Discord (dipakai bot untuk mengedit kartu,
+ * bukan mengirim pesan baru setiap kali status berubah).
+ */
+export async function setWdDiscordMessage(id: number, messageId: unknown) {
+  const current = await prisma.wdRecord.findUnique({ where: { id }, select: { id: true } });
+  if (!current) throw new ApiError(404, "Transaksi WD tidak ditemukan");
+
+  if (messageId !== null && (typeof messageId !== "string" || !/^\d{17,20}$/.test(messageId))) {
+    throw new ApiError(422, "Validasi gagal", {
+      messageId: "messageId harus null atau ID pesan Discord (17-20 digit)",
+    });
+  }
+
+  const row = await prisma.wdRecord.update({
+    where: { id },
+    data: { discordMessageId: messageId as string | null },
+  });
+  return serialize(row);
+}
+

@@ -58,6 +58,7 @@ export type WdRecord = {
   returnNote: string | null;
   lostReason: string | null;
   status: WdStatus;
+  discordMessageId: string | null;
   createdAt: string;
   updatedAt: string;
 };

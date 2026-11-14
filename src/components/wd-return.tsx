@@ -13,7 +13,9 @@ type ReturnProps = { record: WdRecord; onClose: () => void; onSaved: () => void 
 export function WdReturnModal({ record, onClose, onSaved }: ReturnProps) {
   const toast = useToast();
   const [returnedAt, setReturnedAt] = useState(todayWib());
-  const [durabilityReturn, setDurabilityReturn] = useState("");
+  const [durabilityReturn, setDurabilityReturn] = useState(() =>
+    record.isWeapon && record.durabilityStart !== null ? String(record.durabilityStart) : "",
+  );
   const [returnNote, setReturnNote] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -70,7 +72,9 @@ export function WdReturnModal({ record, onClose, onSaved }: ReturnProps) {
               max={100}
               value={durabilityReturn}
               onChange={(e) => setDurabilityReturn(e.target.value)}
-              placeholder={record.durabilityStart !== null ? `Awal ${record.durabilityStart}%` : "—"}
+              placeholder={
+                record.durabilityStart !== null ? `Awal ${record.durabilityStart}% — boleh sama` : "—"
+              }
               disabled={!record.isWeapon}
             />
           </Field>

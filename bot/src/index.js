@@ -13,6 +13,7 @@ import { buildDeleteConfirm, handleDeleteButton } from "./hapus.js";
 import { handleRegistrationMessage } from "./daftar.js";
 import { STATUS, escapeMd } from "./format.js";
 import { refreshStruktur, structureLink } from "./struktur.js";
+import { handleWd, handleWdButton, handleWdModal, syncWdCards, wdChannelId } from "./wd.js";
 
 const { DISCORD_TOKEN, DISCORD_GUILD_ID, STRUKTUR_CHANNEL_ID } = process.env;
 for (const [k, v] of Object.entries({ DISCORD_TOKEN, DISCORD_GUILD_ID, STRUKTUR_CHANNEL_ID })) {
@@ -30,6 +31,13 @@ const REFRESH_MS = 5 * 60_000;
 
 // Channel pendaftaran otomatis: pesan berformat langsung masuk database.
 const DAFTAR_CHANNEL_ID = process.env.DAFTAR_CHANNEL_ID || null;
+
+// Channel WD: kartu pengambilan/pengembalian barang dikirim & diedit di sini.
+if (!wdChannelId()) {
+  console.warn("[wd] WD_CHANNEL_ID belum diisi — kartu WD tidak dikirim ke Discord.");
+} else {
+  console.log(`[wd] kartu WD aktif di channel ${wdChannelId()}`);
+}
 
 // Catatan: field `flags` di /applications/@me tidak bisa diandalkan untuk intent ini
 // (pernah dilaporkan "limited" padahal sudah aktif dan gateway menerima). Jadi selama
@@ -261,13 +269,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isButton()) {
       const isAdd = /^addx?\|/.test(interaction.customId);
       const isDelete = /^delx?\|/.test(interaction.customId);
-      if (!isAdd && !isDelete) return;
+      const isWd = /^wd(ret|hil)\|/.test(interaction.customId);
+      if (!isAdd && !isDelete && !isWd) return;
       if (!isAllowed(interaction)) {
         return interaction.reply({
           content: "⛔ Kamu tidak punya izin.",
           flags: MessageFlags.Ephemeral,
         });
       }
+      if (isWd) return await handleWdButton(interaction);
       if (isDelete) {
         return await handleDeleteButton(interaction, {
           sendLog,
@@ -281,6 +291,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
       });
     }
 
+    if (interaction.isModalSubmit()) {
+      if (!/^wd(ret|hil)sub\|/.test(interaction.customId)) return;
+      if (!isAllowed(interaction)) {
+        return interaction.reply({
+          content: "⛔ Kamu tidak punya izin.",
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+      return await handleWdModal(interaction, { client, sendLog });
+    }
+
     if (!interaction.isChatInputCommand()) return;
 
     if (!isAllowed(interaction)) {
@@ -290,9 +311,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
       });
     }
 
-    const sub = interaction.commandName === "anggota" ? interaction.options.getSubcommand() : null;
+    const isWdCommand = interaction.commandName === "wd";
+    const sub = interaction.commandName === "anggota" || isWdCommand ? interaction.options.getSubcommand() : null;
     // cari & hapus bersifat privat (ephemeral); command lain tampil di channel.
-    const isPrivate = sub === "cari" || sub === "hapus";
+    // Semua command WD privat: kartunya sudah tampil publik di channel WD.
+    const isPrivate = isWdCommand || sub === "cari" || sub === "hapus";
     await interaction.deferReply(isPrivate ? { flags: MessageFlags.Ephemeral } : {});
 
     let result;
@@ -300,11 +323,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await refreshStruktur(client, { force: true });
       return await interaction.editReply(`✅ Struktur diperbarui: ${structureLink()}`);
     }
-    result = await handleAnggota(interaction);
+    if (isWdCommand) {
+      result = await handleWd(interaction, { client, resolveMemberId, sendLog });
+    } else {
+      result = await handleAnggota(interaction);
+    }
 
     if (result?.reply) {
       await interaction.editReply(result.reply);
-      refreshStruktur(client);
+      if (!isWdCommand) refreshStruktur(client);
     }
   } catch (err) {
     const message = err instanceof UserError ? err.message : describeError(err);
@@ -334,6 +361,20 @@ async function handleAutocomplete(interaction) {
       choices = data
         .filter((p) => p.name.toLowerCase().includes(text.toLowerCase()))
         .map((p) => ({ name: p.name, value: String(p.id) }));
+    } else if (focused.name === "barang") {
+      const { data } = await api("/api/wd/items");
+      choices = data
+        .filter((name) => name.toLowerCase().includes(text.toLowerCase()))
+        .slice(0, 25)
+        .map((name) => ({ name: name.slice(0, 100), value: name.slice(0, 100) }));
+    } else if (focused.name === "kode") {
+      const { data } = await api(
+        `/api/wd?status=DIPINJAM&search=${encodeURIComponent(text)}&pageSize=25`,
+      );
+      choices = data.map((r) => ({
+        name: `${r.code} — ${r.borrowerName.replace(/^CT - /, "")} — ${r.itemName}`.slice(0, 100),
+        value: String(r.id),
+      }));
     } else {
       const { data } = await api(`/api/members?search=${encodeURIComponent(text)}&pageSize=25`);
       choices = data.map((m) => ({
@@ -370,7 +411,10 @@ client.once(Events.ClientReady, async (c) => {
   }
   console.log(`[bot] total ${guilds.length} server`);
   refreshStruktur(c, { force: true });
+  syncWdCards(c, { force: true });
   setInterval(() => refreshStruktur(c), REFRESH_MS);
+  // Perubahan dari web (kembali/hilang/edit) ikut tampil di kartu Discord.
+  setInterval(() => syncWdCards(c), 2 * 60_000);
 });
 
 // Auto-daftar dari channel: pesan berformat NAMA LENGKAP / JABATAN / STEAM HEX / ID DISCORD
