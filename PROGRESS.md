@@ -2,7 +2,9 @@
 
 Catatan progres per modul. Terakhir diperbarui: **14 Nov 2026**.
 
-Status modul **Struktur & Anggota** menurut pemilik proyek: **99% selesai** (belum ditutup). Detail sisa 1% ada di bawah.
+Status modul **Struktur & Anggota** menurut pemilik proyek: **99% selesai** (belum ditutup).
+Modul **WD (Withdraw)** selesai di web dan bot-nya sudah terpasang, tetapi **kartu Discord belum
+aktif** karena channel WD masih privat (detail di §3–§4).
 
 ---
 
@@ -11,7 +13,7 @@ Status modul **Struktur & Anggota** menurut pemilik proyek: **99% selesai** (bel
 | Modul | Web | Bot Discord | Status |
 |---|---|---|---|
 | **Struktur & Anggota** | ✅ selesai | ✅ selesai | **99%** — tinggal penyelesaian kecil |
-| WD (Withdraw) | ✅ selesai | ❌ belum | bot belum mulai |
+| **WD (Withdraw)** | ✅ selesai | ⚠️ terpasang, kartu belum aktif | menunggu izin channel WD |
 | Kegiatan | ✅ selesai | ❌ belum | bot belum mulai |
 | Berangkas | ⚠️ placeholder ("segera hadir") | – | belum dibangun |
 
@@ -49,33 +51,90 @@ Status modul **Struktur & Anggota** menurut pemilik proyek: **99% selesai** (bel
 
 ---
 
-## 3. Sisa 1% (belum selesai)
+## 3. WD (Withdraw) — web & bot
 
-Prioritas dari atas:
+### Web `/wd` (selesai)
+- Ringkasan (dipinjam / kembali bulan ini / hilang), filter status + rentang tanggal + pencarian
+  (kode, nama, barang, SN), pagination 20/halaman.
+- Form Ambil/Edit (anggota, barang, toggle senjata, SN, durab, qty, tanggal, keperluan).
+- Modal Kembali (durab default = durab awal — **boleh sama**) dan modal Hilang (alasan wajib).
+- Detail berisi format baku + tombol **Salin format**.
 
-1. **Log audit channel** — `LOG_CHANNEL_ID` masih kosong, jadi setiap perubahan tidak tercatat siapa pelakunya. Ini yang paling terasa risikonya karena bot & web tanpa login.
-2. **Commit kode** — perubahan bot (`daftar.js`, `hapus.js`, `commands.js`, `index.js`, `struktur.js`, `tambah.js`, `docker-compose.yml`) dan web (form anggota, `members.ts`, dll.) masih belum di-commit.
-3. **Ubah urutan jabatan (`sortOrder`)** — belum ada UI; saat ini harus lewat SQL/Adminer.
-4. **`positions.sort_order` tanpa unique constraint** — dua jabatan bisa punya urutan sama, membuat naik/turun melompat.
-5. **Nama anggota belum unik** — belum ada pengecekan duplikat di web; bot hanya memeriksa dari 10 hasil pencarian pertama.
-6. **Default status anggota baru berbeda** — web `AKTIF`, bot slash `TIDAK_DIKETAHUI`, auto-daftar `AKTIF`.
-7. **Hint form Edit menyesatkan** — "Jabatan akan otomatis turun satu tingkat" tidak terjadi karena form selalu mengirim `positionId`.
-8. **Hapus jabatan harus mengosongkan anggotanya satu per satu** — belum ada "pindahkan semua ke jabatan X".
-9. **Turun jabatan dari web tanpa konfirmasi/undo** — satu klik langsung mengubah jabatan + status.
-10. **Pembatasan role di channel pendaftaran** — belum diatur; saat ini penyaringan hanya dari allowlist bot.
-11. **`/anggota ubah` dan `/anggota pindah` belum didaftarkan** — fungsinya hanya tersedia lewat format chat.
-12. **Bot masih memegang `DISCORD_TOKEN` dari `.env` yang sama dengan web** — sebaiknya dipisah.
-13. **Pagination `/anggota`** — belum ada, belum terasa di 65 anggota.
+### Bot Discord (kode selesai, belum aktif)
+- Command: `/wd ambil`, `/wd kembali`, `/wd hilang`, `/wd cari`, `/wd daftar`
+  (autocomplete anggota, saran nama barang, kode transaksi `DIPINJAM`).
+- **Skema kartu = 2 pesan per transaksi:**
+  1. **Kartu pengambilan** — format baku, `TGL PENGEMBALIAN`/`DURAB DIKEMBALIKAN` = `—`,
+     footer 🟡 *Dipinjam*, tombol **✅ Kembalikan** / **⚠️ Tandai hilang**.
+  2. **Kartu pengembalian/hilang** — pesan **baru** dengan format lengkap yang sama, tetapi
+     tanggal & durab kembali sudah terisi, footer 🟢 *Dikembalikan* / 🔴 *Hilang*, tanpa tombol.
+- Kartu pengambilan tidak diubah isinya; hanya tombolnya dicabut agar tidak diklik dua kali.
+- `discord_message_id` menyimpan ID kartu terakhir → dipakai untuk edit & sinkronisasi.
+- ✅ membuka modal: durab (default durab awal, boleh sama) + catatan kondisi; tanggal kembali
+  otomatis hari ini (WIB). Tidak perlu mengetik format — bot mengisi lengkap dari database.
+- Sinkronisasi web → Discord tiap 2 menit (`GET /api/wd?updatedAfter=`): kalau transaksi sudah
+  kembali di web tetapi kartu pengambilan masih "Dipinjam", bot mengirim kartu pengembalian baru.
+- API pendukung baru: `POST /api/wd/[id]/discord-message`, filter `updatedAfter` di `GET /api/wd`.
+
+### Uji & data
+- Smoke test API: `GET /api/wd?updatedAfter=…` OK, `POST /api/wd/[id]/discord-message` 404 untuk
+  ID tidak ada, web `/wd` HTTP 200.
+- `tsc --noEmit` bersih; `node --check` untuk file bot OK.
+- Data WD saat ini: 2 transaksi (dua-duanya sudah kembali), 0 dipinjam.
+- **Belum diuji end-to-end dari Discord** (klik ✅ → kartu kembali) karena blocker di bawah.
+
+### ⚠️ Blocker: bot belum punya akses channel WD
+- Channel `🔫┃𝚆𝙷𝙸𝚃𝙳𝚁𝙰𝚆-𝙳𝙰` = **`1567507915374460938`** (sudah diisi di `.env` sebagai
+  `WD_CHANNEL_ID`), tetapi channel-nya **privat**: `@everyone` di-deny *View Channel* dan hanya
+  10 user yang diizinkan (tanpa role).
+- Bot (`CT - BOT`) belum ada di permission overwrite channel → `403 Missing Access`.
+  Akibatnya `/wd ambil` tetap tercatat di database & tampil di web, tetapi kartu gagal dikirim.
+- **Tindakan:** tambahkan `CT - BOT` di *Edit Channel → Permissions* dengan izin
+  **View Channel, Send Messages, Embed Links, Read Message History**.
 
 ---
 
-## 4. Konfigurasi aktif
+## 4. Sisa pekerjaan
+
+### 4.1 Struktur & Anggota (sisa 1%)
+Prioritas dari atas:
+
+1. **Log audit channel** — `LOG_CHANNEL_ID` masih kosong, jadi setiap perubahan tidak tercatat siapa pelakunya. Ini yang paling terasa risikonya karena bot & web tanpa login.
+2. **Ubah urutan jabatan (`sortOrder`)** — belum ada UI; saat ini harus lewat SQL/Adminer.
+3. **`positions.sort_order` tanpa unique constraint** — dua jabatan bisa punya urutan sama, membuat naik/turun melompat.
+4. **Nama anggota belum unik** — belum ada pengecekan duplikat di web; bot hanya memeriksa dari 10 hasil pencarian pertama.
+5. **Default status anggota baru berbeda** — web `AKTIF`, bot slash `TIDAK_DIKETAHUI`, auto-daftar `AKTIF`.
+6. **Hint form Edit menyesatkan** — "Jabatan akan otomatis turun satu tingkat" tidak terjadi karena form selalu mengirim `positionId`.
+7. **Hapus jabatan harus mengosongkan anggotanya satu per satu** — belum ada "pindahkan semua ke jabatan X".
+8. **Turun jabatan dari web tanpa konfirmasi/undo** — satu klik langsung mengubah jabatan + status.
+9. **Pembatasan role di channel pendaftaran** — belum diatur; saat ini penyaringan hanya dari allowlist bot.
+10. **`/anggota ubah` dan `/anggota pindah` belum didaftarkan** — fungsinya hanya tersedia lewat format chat.
+11. **Bot masih memegang `DISCORD_TOKEN` dari `.env` yang sama dengan web** — sebaiknya dipisah.
+12. **Pagination `/anggota`** — belum ada, belum terasa di 65 anggota.
+
+### 4.2 WD (yang belum)
+1. **Aktifkan kartu Discord** — beri `CT - BOT` akses ke channel WD, lalu uji end-to-end:
+   `/wd ambil` → klik ✅ → kartu pengembalian muncul → cek web.
+2. **Koreksi transaksi** — setelah `DIKEMBALIKAN`/`HILANG` data terkunci. Rencana:
+   `/wd batal-kembali` (balik ke `DIPINJAM`, hapus kartu pengembalian, pulihkan tombol) +
+   tombol "Batalkan pengembalian" di web. **Belum dibuat** (diputuskan menyusul).
+3. **WD dari web tidak membuat kartu Discord** — hanya `/wd ambil` yang memposting kartu;
+   transaksi dari web tidak muncul di channel.
+4. **`/wd daftar`** hanya 20 baris, belum ada pagination.
+5. **Log audit WD** — `LOG_CHANNEL_ID` kosong; pelaku perubahan tidak tercatat.
+6. **Master barang/Berangkas** — nama barang masih teks bebas + saran dari transaksi lama.
+7. **Tes otomatis** — belum ada tes untuk alur kartu/tombol; baru smoke test API.
+
+---
+
+## 5. Konfigurasi aktif
 
 | Env | Nilai | Keterangan |
 |---|---|---|
 | `DISCORD_GUILD_ID` | `1541970119129833552` | Server Central T |
 | `STRUKTUR_CHANNEL_ID` | `1570765829581054073` | Channel `🌐┃𝚂𝚃𝚁𝚄𝙺𝚃𝚄𝚁-𝙲𝚃` |
 | `DAFTAR_CHANNEL_ID` | `1570765829581054073` | Auto-daftar dari chat (channel yang sama) |
+| `WD_CHANNEL_ID` | `1567507915374460938` | Channel `🔫┃𝚆𝙷𝙸𝚃𝙳𝚁𝙰𝚆-𝙳𝙰` — **privat, bot belum punya akses** |
 | `ALLOWED_ROLE_IDS` | `1541988598717354105` | Role BIG HOMIES |
 | `ALLOWED_USER_IDS` | `994798708812161055`, `1428649915189428244` | Pemilik + 1 teman |
 | `LOG_CHANNEL_ID` | kosong | Belum diaktifkan |
@@ -84,13 +143,23 @@ Catatan: `Message Content Intent` **wajib aktif** di Developer Portal untuk fitu
 
 ---
 
-## 5. Cara deploy & cek
+## 6. Cara deploy & cek
 
 ```powershell
 cd C:\Users\irfan\Documents\CT\central-t
-docker compose --profile app up -d --build app bot   # setelah ubah kode
+docker compose --profile app up -d --build app bot   # setelah ubah kode web/bot
 docker logs -t --tail 20 central-t-bot                # cek log bot
 docker exec central-t-db psql -U centralt -d centralt -c "select count(*) from members;"
+```
+
+Cek cepat setelah deploy:
+
+```powershell
+# web hidup?
+Invoke-WebRequest http://localhost:3000/wd -UseBasicParsing | Select-Object StatusCode
+
+# API WD + filter sinkronisasi
+Invoke-RestMethod "http://localhost:3000/api/wd?updatedAfter=2026-11-14T00:00:00Z&pageSize=5" | ConvertTo-Json -Depth 3
 ```
 
 Melihat menu bot yang aktif (dari sisi Discord, bukan asumsi):
@@ -102,8 +171,9 @@ curl.exe -s -H "Authorization: Bot $tok" "https://discord.com/api/v10/applicatio
 
 ---
 
-## 6. Berikutnya (setelah Struktur & Anggota ditutup)
+## 7. Berikutnya (setelah WD aktif)
 
-1. **WD di Discord** — `/wd ambil`, `/wd kembali`, `/wd cari`, `/wd daftar`; embed di channel WD + `discord_message_id` sudah disiapkan di skema.
-2. **Kegiatan di Discord** — `/kegiatan catat`, `/kegiatan rekap`; perlu migrasi `discord_message_id` untuk `activities`.
+1. **WD**: aktifkan akses channel → uji end-to-end → koreksi (`batal-kembali`) → master barang.
+2. **Kegiatan di Discord** — `/kegiatan catat`, `/kegiatan rekap`; perlu migrasi
+   `discord_message_id` untuk `activities`.
 3. **Berangkas** — halaman masih placeholder.
