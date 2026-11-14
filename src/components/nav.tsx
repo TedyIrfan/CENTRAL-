@@ -8,6 +8,8 @@ const links = [
   { href: "/", label: "Struktur" },
   { href: "/anggota", label: "Anggota" },
   { href: "/wd", label: "WD" },
+  { href: "/kegiatan", label: "Kegiatan" },
+  { href: "/berangkas", label: "Berangkas" },
 ];
 
 export function Nav() {
@@ -27,7 +29,7 @@ export function Nav() {
           />
           <span className="text-lg font-bold tracking-tight">Central T</span>
         </Link>
-        <nav className="flex gap-1">
+        <nav className="flex gap-1 overflow-x-auto">
           {links.map((l) => {
             const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
             return (

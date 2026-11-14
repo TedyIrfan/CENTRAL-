@@ -33,10 +33,84 @@ model Member {
   hex        String?      @unique
   discordId  String?      @unique @map("discord_id")
   status     MemberStatus @default(TIDAK_DIKETAHUI)
+  wdRecords  WdRecord[]
+  activityParticipations ActivityParticipant[]
   createdAt  DateTime     @default(now()) @map("created_at")
   updatedAt  DateTime     @updatedAt @map("updated_at")
 
   @@index([status])
   @@index([positionId])
   @@map("members")
+}
+
+enum WdStatus {
+  DIPINJAM
+  DIKEMBALIKAN
+  HILANG
+}
+
+/// Pencatatan pengambilan & pengembalian barang (WD).
+model WdRecord {
+  id               Int       @id @default(autoincrement())
+  code             String    @unique
+  memberId         Int?      @map("member_id")
+  member           Member?   @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  borrowerName     String    @map("borrower_name")
+  itemName         String    @map("item_name")
+  isWeapon         Boolean   @default(false) @map("is_weapon")
+  serialNumber     String?   @map("serial_number")
+  qty              Int       @default(1)
+  durabilityStart  Int?      @map("durability_start")
+  durabilityReturn Int?      @map("durability_return")
+  takenAt          DateTime  @map("taken_at")
+  returnedAt       DateTime? @map("returned_at")
+  purpose          String
+  returnNote       String?   @map("return_note")
+  lostReason       String?   @map("lost_reason")
+  status           WdStatus  @default(DIPINJAM)
+  discordMessageId String?   @map("discord_message_id")
+  createdBy        String?   @map("created_by")
+  returnedBy       String?   @map("returned_by")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([borrowerName])
+  @@index([serialNumber])
+  @@index([takenAt])
+  @@map("wd_records")
+}
+
+
+/// Kegiatan/acara yang diikuti anggota.
+model Activity {
+  id           Int                   @id @default(autoincrement())
+  code         String                @unique
+  title        String
+  negotiation  String?
+  activityDate DateTime              @map("activity_date")
+  createdBy    String?               @map("created_by")
+  participants ActivityParticipant[]
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
+
+  @@index([activityDate])
+  @@map("activities")
+}
+
+/// Peserta kegiatan (anggota terdaftar atau nama manual).
+model ActivityParticipant {
+  id         Int      @id @default(autoincrement())
+  activityId Int      @map("activity_id")
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  memberId   Int?     @map("member_id")
+  member     Member?  @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  name       String
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([activityId, memberId])
+  @@index([activityId])
+  @@index([memberId])
+  @@map("activity_participants")
 }
