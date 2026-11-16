@@ -16,22 +16,25 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const push = useCallback<ToastFn>((message, kind = "success") => {
     const id = Date.now() + Math.random();
-    setToasts((t) => [...t, { id, message, kind }]);
+    setToasts((t) => [...t.slice(-3), { id, message, kind }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
   }, []);
 
   return (
     <ToastContext.Provider value={push}>
       {children}
-      <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex flex-col gap-2">
+      <div
+        className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-[min(92vw,340px)] flex-col gap-2"
+        role="status"
+        aria-live="polite"
+      >
         {toasts.map((t) => (
           <div
             key={t.id}
-            role="status"
-            className={`pointer-events-auto max-w-sm rounded-lg border px-4 py-3 text-sm shadow-xl backdrop-blur ${
+            className={`fade-in pointer-events-auto rounded-field border bg-surface px-3 py-2 text-[12.5px] shadow-[0_12px_32px_-16px_rgb(20_19_15_/0.4)] ${
               t.kind === "success"
-                ? "border-emerald-500/30 bg-emerald-950/90 text-emerald-100"
-                : "border-rose-500/30 bg-rose-950/90 text-rose-100"
+                ? "border-line border-l-2 border-l-ok text-ink"
+                : "border-line border-l-2 border-l-bad text-ink"
             }`}
           >
             {t.message}

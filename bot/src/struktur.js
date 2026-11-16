@@ -1,56 +1,14 @@
 import { createHash } from "node:crypto";
 import { EmbedBuilder } from "discord.js";
 import { api } from "./api.js";
-import { STATUS, escapeMd } from "./format.js";
+import { buildMessages } from "./struktur-format.js";
 
 const MARKER = "CT-STRUKTUR";
-const MAX_EMBED_DESC = 3800;
 const MAX_MESSAGE_CHARS = 5500;
 const MAX_EMBEDS_PER_MESSAGE = 10;
 
-function memberLine(m) {
-  const parts = [`${STATUS[m.status].emoji} **${escapeMd(m.name)}**`];
-  if (m.hex) parts.push(`\`${m.hex}\``);
-  if (m.discordId) parts.push(`\`${m.discordId}\``);
-  return parts.join(" — ");
-}
-
-function chunkLines(lines, max) {
-  const chunks = [];
-  let current = [];
-  let size = 0;
-  for (const line of lines) {
-    if (current.length && size + line.length + 1 > max) {
-      chunks.push(current);
-      current = [];
-      size = 0;
-    }
-    current.push(line);
-    size += line.length + 1;
-  }
-  if (current.length) chunks.push(current);
-  return chunks;
-}
-
-/** Ubah data grouped dari API menjadi daftar "pesan", masing-masing berisi beberapa embed. */
-function buildMessages(groups) {
-  const total = groups.reduce((n, g) => n + g.members.length, 0);
-  const embeds = [
-    {
-      title: "STRUKTUR CENTRAL-T",
-      description: `Total **${total}** anggota\n🟢 Aktif  ⚫ Tidak Aktif  🔴 Diturunkan  ⚪ Tidak Diketahui`,
-    },
-  ];
-  for (const g of groups) {
-    const lines = g.members.length ? g.members.map(memberLine) : ["_Kosong_"];
-    chunkLines(lines, MAX_EMBED_DESC).forEach((chunk, i) => {
-      embeds.push({
-        title: `${g.name} (${g.members.length})${i > 0 ? " — lanjutan" : ""}`,
-        description: chunk.join("\n"),
-      });
-    });
-  }
-
+/** Bungkus embed jadi satu pesan, sebanyak yang muat (maks 10 embed / 5500 karakter). */
+function groupIntoMessages(embeds) {
   const messages = [];
   let current = [];
   let size = 0;
@@ -70,7 +28,7 @@ function buildMessages(groups) {
 
 function toPayload(embedData, index, count) {
   const embeds = embedData.map((e) =>
-    new EmbedBuilder().setColor(0xffffff).setTitle(e.title).setDescription(e.description),
+    new EmbedBuilder().setColor(e.color).setTitle(e.title).setDescription(e.description),
   );
   embeds[embeds.length - 1]
     .setFooter({ text: `${MARKER} • ${index + 1}/${count}` })
@@ -91,7 +49,7 @@ export function refreshStruktur(client, { force = false } = {}) {
 
 async function doRefresh(client, force) {
   const { data: groups } = await api("/api/members/grouped");
-  const messages = buildMessages(groups);
+  const messages = groupIntoMessages(buildMessages(groups));
   const hash = createHash("sha1").update(JSON.stringify(messages)).digest("hex");
   if (!force && hash === lastHash) return;
 

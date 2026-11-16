@@ -3,10 +3,12 @@
 import { useState, type FormEvent } from "react";
 import { api, ApiRequestError } from "@/lib/api-client";
 import type { WdRecord } from "@/lib/types";
-import { todayWib, toDateInput } from "@/lib/dates";
+import { WEAPON_DUE_DAYS } from "@/lib/types";
+import { addDaysIso, formatDateId, todayWib, toDateInput } from "@/lib/dates";
 import { Modal } from "@/components/modal";
 import { MemberPicker, type MemberOption } from "@/components/member-picker";
 import { Button, Field, inputClass } from "@/components/ui";
+import { IconAlert } from "@/components/icons";
 import { useToast } from "@/components/toast";
 
 export type { MemberOption };
@@ -31,9 +33,7 @@ export function WdFormModal({ members, suggestions, record, onClose, onSaved }: 
       ? String(record.durabilityStart)
       : "100",
   );
-  const [takenAt, setTakenAt] = useState(
-    record ? toDateInput(record.takenAt) : todayWib(),
-  );
+  const [takenAt, setTakenAt] = useState(record ? toDateInput(record.takenAt) : todayWib());
   const [purpose, setPurpose] = useState(record?.purpose ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -51,7 +51,11 @@ export function WdFormModal({ members, suggestions, record, onClose, onSaved }: 
       isWeapon,
       serialNumber: isWeapon ? serialNumber : null,
       qty: qty.trim() === "" ? null : Number(qty),
-      durabilityStart: isWeapon ? (durabilityStart.trim() === "" ? null : Number(durabilityStart)) : null,
+      durabilityStart: isWeapon
+        ? durabilityStart.trim() === ""
+          ? null
+          : Number(durabilityStart)
+        : null,
       takenAt,
       purpose,
     };
@@ -75,7 +79,7 @@ export function WdFormModal({ members, suggestions, record, onClose, onSaved }: 
 
   return (
     <Modal title={record ? `Edit ${record.code}` : "Ambil barang (WD)"} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3.5">
+      <form onSubmit={submit} className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <MemberPicker
             members={sorted}
@@ -100,15 +104,24 @@ export function WdFormModal({ members, suggestions, record, onClose, onSaved }: 
           </Field>
         </div>
 
-        <label className="flex items-center gap-2 text-sm text-zinc-300">
+        <label className="flex items-center gap-2 text-[12.5px] text-ink-2">
           <input
             type="checkbox"
-            className="h-4 w-4 accent-white"
+            className="h-3.5 w-3.5 accent-ink"
             checked={isWeapon}
             onChange={(e) => setIsWeapon(e.target.checked)}
           />
-          Senjata (wajib SN &amp; durab)
+          Senjata — wajib SN &amp; durab, kembali maksimal {WEAPON_DUE_DAYS} hari
         </label>
+
+        {isWeapon && (
+          <div className="flex items-center gap-1.5 rounded-field border border-warn/25 bg-warn-soft px-2.5 py-1.5 text-[11.5px] text-warn">
+            Tenggat pengembalian:{" "}
+            <b className="font-semibold">
+              {takenAt ? formatDateId(addDaysIso(takenAt, WEAPON_DUE_DAYS)) : "—"}
+            </b>
+          </div>
+        )}
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="SN" error={errors.serialNumber}>
@@ -155,7 +168,7 @@ export function WdFormModal({ members, suggestions, record, onClose, onSaved }: 
 
         <Field label="Keperluan" error={errors.purpose}>
           <textarea
-            className={`${inputClass} min-h-20 resize-y`}
+            className={`${inputClass} min-h-[72px] resize-y`}
             value={purpose}
             onChange={(e) => setPurpose(e.target.value)}
             placeholder="Contoh: Jaga wilayah / operasi"
@@ -172,5 +185,13 @@ export function WdFormModal({ members, suggestions, record, onClose, onSaved }: 
         </div>
       </form>
     </Modal>
+  );
+}
+
+export function WdDueNote({ text }: { text: string }) {
+  return (
+    <p className="flex items-center gap-1.5 text-[11.5px] text-warn">
+      <IconAlert size={12} /> {text}
+    </p>
   );
 }

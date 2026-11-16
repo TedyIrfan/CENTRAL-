@@ -14,12 +14,12 @@ RUN npx prisma generate && npm run build
 
 FROM base AS runner
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=3001
 ENV HOSTNAME=0.0.0.0
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 RUN npm install --prefix /opt/prisma-cli --no-save --no-audit --no-fund prisma@6
-EXPOSE 3000
+EXPOSE 3001
 CMD ["sh", "-c", "/opt/prisma-cli/node_modules/.bin/prisma migrate deploy --schema ./prisma/schema.prisma && node server.js"]

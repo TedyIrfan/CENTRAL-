@@ -1,7 +1,7 @@
 # PRD - Kegiatan Central T
 
-Status: **Fase 1 (web) diimplementasikan** · Tanggal: 13 November 2026
-Fokus: halaman `/kegiatan` di web. Bot Discord menyusul seperti WD.
+Status: **Fase 1 (web) + bot auto-catat terpasang & channel siap** · Tanggal: 14 November 2026
+Fokus: halaman `/kegiatan` di web + auto-catat dari channel Discord.
 
 ---
 
@@ -74,7 +74,7 @@ supaya nama tetap sejajar.
 
 ### 4.3 Detail & salin
 - Ikon ⧉ membuka detail berisi teks format baku + tombol **Salin format**
-  (untuk ditempel ke Discord selama bot belum aktif).
+  (untuk ditempel ke Discord atau diarsipkan).
 
 ### 4.4 Rekap
 - Kartu statistik: **Kegiatan bulan ini · Peserta bulan ini · Total kegiatan**.
@@ -163,18 +163,40 @@ Status: sudah terpasang di `/kegiatan` (bukan lagi placeholder).
 
 ---
 
-## 9. Fase berikutnya
+## 9. Bot Discord (terpasang, channel siap)
 
-1. **Bot Discord**: `/kegiatan catat`, `/kegiatan rekap`, embed format baku, log channel.
+Skema mengikuti auto-daftar struktur: tulis pesan berformat baku di channel, bot mencatat, lalu
+pesannya diberi reaksi ✅.
+
+- Channel: `👥┃𝙽𝙰𝙼𝙰-𝙰𝙽𝙶𝙶𝙾𝚃𝙰-𝚈𝙰𝙽𝙶-𝙸𝙺𝚄𝚃-𝙺𝙴𝙶𝙸𝙰𝚃𝙰𝙽` =
+  `1568673636355670218` (`KEGIATAN_CHANNEL_ID`).
+- Pesan valid → `POST /api/activities`, kode `KGT-YYYYMMDD-NNN`, reaksi ✅.
+- Format salah → reaksi ⚠️ + alasan + contoh format (pesan balasan hilang sendiri 25 detik).
+- Pengirim di luar allowlist → ⛔. Chat biasa di channel diabaikan.
+- **Edit pesan = edit data yang sama**, lewat `activities.discord_message_id` (unique) —
+  tidak membuat baris baru.
+- Peserta dicocokkan ke anggota (nama persis, case-insensitive); nama yang tidak ada disimpan
+  sebagai peserta manual (K1).
+- `/kegiatan rekap` → kegiatan bulan ini, peserta bulan ini, total, + 10 kegiatan terakhir.
+- Batas: 1–50 peserta, nama manual 2–60 karakter, tanggal `DD/MM/YYYY` atau `YYYY-MM-DD`.
+- Migrasi: `prisma/migrations/20261114130000_add_activity_discord_message`.
+
+✅ **Akses channel diberikan (14 Nov 2026):** `CT - BOT` sudah punya **View Channel,
+Read Message History, Add Reactions, Send Messages, Embed Links**. Tinggal uji kirim format
+asli di channel.
+
+## 10. Fase berikutnya
+
+1. **Bot Discord (lanjutan)**: uji end-to-end setelah izin channel, `/kegiatan catat`,
+   `/kegiatan impor` untuk pesan lama, kartu embed + tombol (opsional).
 2. **Rekap & statistik lanjutan**: kegiatan per anggota, grafik bulanan, export CSV.
 3. **Kehadiran**: status hadir/izin, foto bukti kegiatan.
 4. **Integrasi WD**: barang yang dipakai pada kegiatan.
 
 ---
 
-## 10. Di luar lingkup saat ini
+## 11. Di luar lingkup saat ini
 
 - Kehadiran detail, foto, dan lampiran.
 - Sinkronisasi dengan Berangkas/WD.
-- Bot Discord.
 - Login/role web.

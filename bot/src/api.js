@@ -1,4 +1,4 @@
-const BASE = process.env.API_URL ?? "http://localhost:3000";
+const BASE = process.env.API_URL ?? "http://localhost:3001";
 
 export class ApiError extends Error {
   constructor(message, status, fields) {

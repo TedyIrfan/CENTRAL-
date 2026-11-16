@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { api, ApiRequestError } from "@/lib/api-client";
 import type { WdRecord } from "@/lib/types";
-import { formatDateId, todayWib } from "@/lib/dates";
+import { formatDateId, daysBetween, todayWib } from "@/lib/dates";
 import { Modal } from "@/components/modal";
 import { Button, Field, inputClass } from "@/components/ui";
 import { useToast } from "@/components/toast";
@@ -20,6 +20,9 @@ export function WdReturnModal({ record, onClose, onSaved }: ReturnProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
+  const lateDays = record.dueAt ? daysBetween(returnedAt, record.dueAt) : 0;
+  const leftDays = record.dueAt ? daysBetween(record.dueAt, returnedAt) : 0;
+
   async function submit(e: FormEvent) {
     e.preventDefault();
     setErrors({});
@@ -34,7 +37,9 @@ export function WdReturnModal({ record, onClose, onSaved }: ReturnProps) {
           returnNote,
         },
       });
-      toast(`${record.code} dikembalikan`);
+      toast(
+        `${record.code} dikembalikan${lateDays > 0 ? ` (terlambat ${lateDays} hari)` : ""}`,
+      );
       onSaved();
     } catch (err) {
       if (err instanceof ApiRequestError && err.fields) setErrors(err.fields);
@@ -46,11 +51,19 @@ export function WdReturnModal({ record, onClose, onSaved }: ReturnProps) {
 
   return (
     <Modal title={`Kembalikan ${record.itemName}`} onClose={onClose}>
-      <p className="mb-4 text-sm text-zinc-400">
+      <p className="text-[12.5px] text-ink-2">
         {record.borrowerName} · diambil {formatDateId(record.takenAt)}
         {record.serialNumber ? ` · SN ${record.serialNumber}` : ""}
       </p>
-      <form onSubmit={submit} className="space-y-3.5">
+      {record.isWeapon && record.dueAt && (
+        <p className={`mb-3 mt-1 text-[12.5px] ${lateDays > 0 ? "text-bad" : "text-ink-3"}`}>
+          Tenggat: <b className="font-semibold">{formatDateId(record.dueAt)}</b>
+          {lateDays > 0
+            ? ` — terlambat ${lateDays} hari`
+            : ` — ${leftDays === 0 ? "hari ini" : `sisa ${leftDays} hari`}`}
+        </p>
+      )}
+      <form onSubmit={submit} className="mt-3 space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Tanggal pengembalian" error={errors.returnedAt}>
             <input
@@ -73,7 +86,9 @@ export function WdReturnModal({ record, onClose, onSaved }: ReturnProps) {
               value={durabilityReturn}
               onChange={(e) => setDurabilityReturn(e.target.value)}
               placeholder={
-                record.durabilityStart !== null ? `Awal ${record.durabilityStart}% — boleh sama` : "—"
+                record.durabilityStart !== null
+                  ? `Awal ${record.durabilityStart}% — boleh sama`
+                  : "—"
               }
               disabled={!record.isWeapon}
             />
@@ -81,7 +96,7 @@ export function WdReturnModal({ record, onClose, onSaved }: ReturnProps) {
         </div>
         <Field label="Catatan kondisi (opsional)" error={errors.returnNote}>
           <textarea
-            className={`${inputClass} min-h-16 resize-y`}
+            className={`${inputClass} min-h-[60px] resize-y`}
             value={returnNote}
             onChange={(e) => setReturnNote(e.target.value)}
             placeholder="Contoh: baret halus, magasin lengkap"
@@ -126,14 +141,14 @@ export function WdLostModal({ record, onClose, onSaved }: LostProps) {
 
   return (
     <Modal title={`Tandai hilang — ${record.code}`} onClose={onClose}>
-      <p className="mb-4 text-sm text-zinc-400">
+      <p className="mb-3 text-[12.5px] text-ink-2">
         {record.borrowerName} · {record.itemName}
         {record.serialNumber ? ` · SN ${record.serialNumber}` : ""}
       </p>
-      <form onSubmit={submit} className="space-y-3.5">
+      <form onSubmit={submit} className="space-y-3">
         <Field label="Alasan hilang" error={errors.lostReason}>
           <textarea
-            className={`${inputClass} min-h-20 resize-y`}
+            className={`${inputClass} min-h-[72px] resize-y`}
             value={lostReason}
             onChange={(e) => setLostReason(e.target.value)}
             placeholder="Contoh: hilang saat operasi, tidak dikembalikan"

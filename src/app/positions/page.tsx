@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiRequestError } from "@/lib/api-client";
 import type { Position } from "@/lib/types";
 import { Modal } from "@/components/modal";
-import { Button, inputClass } from "@/components/ui";
+import { Button, IconButton, PageHeader, Panel, inputClass } from "@/components/ui";
+import { IconCheck, IconPencil, IconPlus, IconTrash, IconX } from "@/components/icons";
 import { useToast } from "@/components/toast";
 
 export default function PositionsPage() {
@@ -83,98 +84,111 @@ export default function PositionsPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="text-2xl font-bold tracking-tight">Jabatan</h1>
-      <p className="mb-6 text-sm text-zinc-500">
-        Urutan dari atas ke bawah adalah hierarki. Jabatan baru masuk di paling bawah.
-      </p>
+      <PageHeader
+        title="Jabatan"
+        description="Urutan atas ke bawah adalah hierarki. Jabatan baru masuk paling bawah."
+      />
 
-      <form onSubmit={add} className="mb-6">
+      <form onSubmit={add} className="mb-3">
         <div className="flex gap-2">
           <input
             className={inputClass}
             placeholder="Nama jabatan baru"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
+            aria-label="Nama jabatan baru"
           />
-          <Button type="submit" variant="primary" className="shrink-0">
-            + Tambah
+          <Button type="submit" variant="primary">
+            <IconPlus size={14} /> Tambah
           </Button>
         </div>
-        {newError && <p className="mt-1 text-xs text-rose-400">{newError}</p>}
+        {newError && <p className="mt-1 text-[11.5px] text-bad">{newError}</p>}
       </form>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-rose-500/30 bg-rose-950/50 p-4 text-sm text-rose-200">
-          {error}{" "}
-          <button className="underline" onClick={load}>
-            Coba lagi
+        <div className="mb-3 flex items-center gap-2 rounded-field border border-bad/25 bg-bad-soft px-3 py-2 text-[12.5px] text-bad">
+          {error}
+          <button type="button" className="underline" onClick={load}>
+            coba lagi
           </button>
         </div>
       )}
 
       {loading ? (
-        <p className="text-sm text-zinc-500">Memuat…</p>
+        <p className="text-[13px] text-ink-3">Memuat…</p>
       ) : (
-        <ul className="divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10 bg-zinc-900/50">
-          {positions.map((p, i) => (
-            <li key={p.id} className="flex items-center gap-3 px-4 py-3">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs text-zinc-400">
-                {i + 1}
-              </span>
+        <Panel>
+          <ul>
+            {positions.map((p, i) => (
+              <li
+                key={p.id}
+                className="flex items-center gap-3 border-b border-line/60 px-3 py-2 last:border-0"
+              >
+                <span className="tnum flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-2 text-[11px] text-ink-3">
+                  {i + 1}
+                </span>
 
-              {editId === p.id ? (
-                <form onSubmit={saveEdit} className="flex-1">
-                  <div className="flex gap-2">
-                    <input
-                      className={inputClass}
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      autoFocus
-                    />
-                    <Button type="submit" variant="primary">
-                      Simpan
-                    </Button>
-                    <Button type="button" onClick={() => setEditId(null)}>
-                      Batal
-                    </Button>
-                  </div>
-                  {editError && <p className="mt-1 text-xs text-rose-400">{editError}</p>}
-                </form>
-              ) : (
-                <>
-                  <div className="flex-1">
-                    <span className="font-semibold">{p.name}</span>
-                    <span className="ml-2 text-xs text-zinc-500">{p.memberCount} anggota</span>
-                  </div>
-                  <Button
-                    onClick={() => {
-                      setEditId(p.id);
-                      setEditName(p.name);
-                      setEditError(null);
-                    }}
-                  >
-                    Ubah
-                  </Button>
-                  <Button
-                    onClick={() => setDeleting(p)}
-                    disabled={p.memberCount > 0}
-                    title={p.memberCount > 0 ? "Masih dipakai anggota" : "Hapus jabatan"}
-                  >
-                    Hapus
-                  </Button>
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
+                {editId === p.id ? (
+                  <form onSubmit={saveEdit} className="flex-1">
+                    <div className="flex gap-2">
+                      <input
+                        className={inputClass}
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        autoFocus
+                        aria-label="Nama jabatan"
+                      />
+                      <IconButton label="Simpan nama" type="submit">
+                        <IconCheck size={14} />
+                      </IconButton>
+                      <IconButton label="Batal" onClick={() => setEditId(null)}>
+                        <IconX size={14} />
+                      </IconButton>
+                    </div>
+                    {editError && <p className="mt-1 text-[11.5px] text-bad">{editError}</p>}
+                  </form>
+                ) : (
+                  <>
+                    <div className="flex-1">
+                      <span className="text-[13px] font-medium">{p.name}</span>
+                      <span className="tnum ml-2 text-[11px] text-ink-3">
+                        {p.memberCount} anggota
+                      </span>
+                    </div>
+                    <IconButton
+                      label="Ubah nama jabatan"
+                      onClick={() => {
+                        setEditId(p.id);
+                        setEditName(p.name);
+                        setEditError(null);
+                      }}
+                    >
+                      <IconPencil size={14} />
+                    </IconButton>
+                    <IconButton
+                      label={
+                        p.memberCount > 0 ? "Masih dipakai anggota" : "Hapus jabatan"
+                      }
+                      tone="danger"
+                      disabled={p.memberCount > 0}
+                      onClick={() => setDeleting(p)}
+                    >
+                      <IconTrash size={14} />
+                    </IconButton>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Panel>
       )}
 
       {deleting && (
         <Modal title="Hapus jabatan?" onClose={() => setDeleting(null)}>
-          <p className="text-sm text-zinc-300">
-            Jabatan <b>{deleting.name}</b> akan dihapus.
+          <p className="text-[13px] text-ink-2">
+            Jabatan <b className="text-ink">{deleting.name}</b> akan dihapus.
           </p>
-          <div className="mt-5 flex justify-end gap-2">
+          <div className="mt-4 flex justify-end gap-2">
             <Button onClick={() => setDeleting(null)}>Batal</Button>
             <Button variant="danger" onClick={confirmDelete}>
               Hapus

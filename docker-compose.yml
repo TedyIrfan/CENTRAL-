@@ -30,7 +30,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
     ports:
-      - "3000:3000"
+      - "3001:3001"
 
   bot:
     build: ./bot
@@ -40,15 +40,18 @@ services:
     depends_on:
       - app
     environment:
-      API_URL: http://app:3000
+      API_URL: http://app:3001
       DISCORD_TOKEN: ${DISCORD_TOKEN}
       DISCORD_GUILD_ID: ${DISCORD_GUILD_ID}
       STRUKTUR_CHANNEL_ID: ${STRUKTUR_CHANNEL_ID}
       WD_CHANNEL_ID: ${WD_CHANNEL_ID:-}
       DAFTAR_CHANNEL_ID: ${DAFTAR_CHANNEL_ID:-}
+      KEGIATAN_CHANNEL_ID: ${KEGIATAN_CHANNEL_ID:-}
       LOG_CHANNEL_ID: ${LOG_CHANNEL_ID:-}
       ALLOWED_ROLE_IDS: ${ALLOWED_ROLE_IDS:-}
       ALLOWED_USER_IDS: ${ALLOWED_USER_IDS:-}
+      # Pengingat "PENGEMBALIAN TERLAMBAT" di channel WD (default: mati)
+      WD_REMINDER_ENABLED: ${WD_REMINDER_ENABLED:-0}
 
   adminer:
     image: adminer

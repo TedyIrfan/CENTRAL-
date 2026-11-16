@@ -1,5 +1,5 @@
 // Uji end-to-end API anggota. Jalankan: node scripts/test-members.mjs [baseUrl]
-const base = process.argv[2] ?? "http://localhost:3000";
+const base = process.argv[2] ?? "http://localhost:3001";
 let failed = 0;
 
 async function call(method, path, body) {

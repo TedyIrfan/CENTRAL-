@@ -181,4 +181,12 @@ export const commands = [
       s.setName("daftar").setDescription("Lihat semua barang yang masih dipinjam"),
     )
     .toJSON(),
+
+  new SlashCommandBuilder()
+    .setName("kegiatan")
+    .setDescription("Kegiatan Central T")
+    .addSubcommand((s) =>
+      s.setName("rekap").setDescription("Rekap kegiatan bulan ini (kegiatan, peserta, total)"),
+    )
+    .toJSON(),
 ];

@@ -1,7 +1,15 @@
-import { Prisma, WdStatus, type WdRecord as WdRow } from "@prisma/client";
+import { Prisma, VaultStatus, WdStatus, type WdRecord as WdRow } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/errors";
-import { compactDate, parseDateInput, startOfMonthWib, todayWib } from "@/lib/dates";
+import { WEAPON_DUE_DAYS } from "@/lib/types";
+import {
+  addDays,
+  compactDate,
+  daysBetween,
+  parseDateInput,
+  startOfMonthWib,
+  todayWib,
+} from "@/lib/dates";
 
 const STATUSES = Object.values(WdStatus) as string[];
 
@@ -168,6 +176,22 @@ async function assertSerialFree(
   }
 }
 
+/**
+ * Sinkronkan status unit Berangkas (dicocokkan lewat SN) saat WD berubah:
+ * dipinjam → DIPINJAM, kembali → SIAP, hilang → HILANG.
+ */
+async function setVaultStatus(
+  serial: string | null,
+  status: VaultStatus,
+  db: Prisma.TransactionClient | typeof prisma = prisma,
+) {
+  if (!serial) return;
+  await db.vaultItem.updateMany({
+    where: { serialNumber: { equals: serial, mode: "insensitive" } },
+    data: { status },
+  });
+}
+
 async function nextCode(db: Prisma.TransactionClient, date: Date) {
   const prefix = `WD-${compactDate(date)}-`;
   const last = await db.wdRecord.findFirst({
@@ -180,6 +204,18 @@ async function nextCode(db: Prisma.TransactionClient, date: Date) {
 }
 
 function serialize(r: WdRow) {
+  const today = todayDate();
+  const dueAt = r.dueAt;
+  const isOverdue =
+    r.status === WdStatus.DIPINJAM && dueAt !== null && dueAt.getTime() < today.getTime();
+  // Untuk transaksi yang sudah kembali, keterlambatan dihitung sampai tanggal kembali.
+  const lateReference =
+    r.status === WdStatus.DIKEMBALIKAN && r.returnedAt ? r.returnedAt : today;
+  const daysLate =
+    dueAt !== null && r.status !== WdStatus.HILANG ? daysBetween(lateReference, dueAt) : 0;
+  const daysLeft =
+    dueAt !== null && r.status === WdStatus.DIPINJAM ? daysBetween(dueAt, today) : 0;
+
   return {
     id: r.id,
     code: r.code,
@@ -192,12 +228,17 @@ function serialize(r: WdRow) {
     durabilityStart: r.durabilityStart,
     durabilityReturn: r.durabilityReturn,
     takenAt: r.takenAt.toISOString(),
+    dueAt: dueAt?.toISOString() ?? null,
     returnedAt: r.returnedAt?.toISOString() ?? null,
     purpose: r.purpose,
     returnNote: r.returnNote,
     lostReason: r.lostReason,
     status: r.status,
     discordMessageId: r.discordMessageId,
+    reminderAt: r.reminderAt?.toISOString() ?? null,
+    isOverdue,
+    daysLate,
+    daysLeft,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
   };
@@ -212,6 +253,7 @@ export type WdListParams = {
   from?: Date;
   to?: Date;
   updatedAfter?: Date;
+  overdue?: boolean;
   page: number;
   pageSize: number;
 };
@@ -256,6 +298,13 @@ export function parseWdListParams(sp: URLSearchParams): WdListParams {
     else result.updatedAfter = d;
   }
 
+  // Filter "terlambat": hanya senjata DIPINJAM yang sudah melewati tenggat.
+  const overdue = sp.get("overdue");
+  if (overdue !== null && overdue !== "") {
+    if (overdue === "1" || overdue === "true") result.overdue = true;
+    else if (overdue !== "0" && overdue !== "false") errors.overdue = "overdue harus true/false";
+  }
+
   const page = sp.get("page");
   if (page) {
     if (!/^\d+$/.test(page) || Number(page) < 1 || Number(page) > 1_000_000) errors.page = "page tidak valid";
@@ -273,9 +322,18 @@ export function parseWdListParams(sp: URLSearchParams): WdListParams {
   return result;
 }
 
-function buildWhere(p: Pick<WdListParams, "status" | "search" | "itemName" | "from" | "to" | "updatedAfter">) {
+function buildWhere(
+  p: Pick<
+    WdListParams,
+    "status" | "search" | "itemName" | "from" | "to" | "updatedAfter" | "overdue"
+  >,
+) {
   const where: Prisma.WdRecordWhereInput = {};
   if (p.status) where.status = p.status as WdStatus;
+  if (p.overdue) {
+    where.status = WdStatus.DIPINJAM;
+    where.dueAt = { lt: todayDate() };
+  }
   if (p.itemName) where.itemName = { contains: p.itemName, mode: "insensitive" };
   if (p.updatedAfter) where.updatedAt = { gte: p.updatedAfter };
   if (p.from || p.to) {
@@ -320,15 +378,18 @@ export async function getWd(id: number) {
 
 export async function wdStats() {
   const monthStart = startOfMonthWib();
-  const [total, dipinjam, hilang, kembaliBulanIni] = await Promise.all([
+  const [total, dipinjam, hilang, kembaliBulanIni, terlambat] = await Promise.all([
     prisma.wdRecord.count(),
     prisma.wdRecord.count({ where: { status: WdStatus.DIPINJAM } }),
     prisma.wdRecord.count({ where: { status: WdStatus.HILANG } }),
     prisma.wdRecord.count({
       where: { status: WdStatus.DIKEMBALIKAN, returnedAt: { gte: monthStart } },
     }),
+    prisma.wdRecord.count({
+      where: { status: WdStatus.DIPINJAM, dueAt: { lt: todayDate() } },
+    }),
   ]);
-  return { total, dipinjam, kembaliBulanIni, hilang };
+  return { total, dipinjam, kembaliBulanIni, hilang, terlambat };
 }
 
 export async function itemSuggestions() {
@@ -376,10 +437,12 @@ export async function createWd(input: Record<string, unknown>) {
         qty: qty!,
         durabilityStart,
         takenAt,
+        dueAt: isWeapon ? addDays(takenAt, WEAPON_DUE_DAYS) : null,
         purpose: purpose!,
         createdBy: "web",
       },
     });
+    await setVaultStatus(serialNumber ?? null, VaultStatus.DIPINJAM, tx);
     return serialize(row);
   });
 }
@@ -440,10 +503,25 @@ export async function updateWd(id: number, input: Record<string, unknown>) {
   if ("takenAt" in input) data.takenAt = parseDateField(input.takenAt, "Tanggal pengambilan", "takenAt", errors, true);
   if ("purpose" in input) data.purpose = parsePurpose(input.purpose, errors);
 
+  // Tenggat senjata selalu dihitung ulang dari tanggal ambil + 3 hari.
+  if ("isWeapon" in input || "takenAt" in input) {
+    const nextTakenAt = (data.takenAt as Date | undefined) ?? current.takenAt;
+    const nextIsWeapon = "isWeapon" in input ? input.isWeapon === true : current.isWeapon;
+    data.dueAt = nextIsWeapon ? addDays(nextTakenAt, WEAPON_DUE_DAYS) : null;
+  }
+
   if (Object.keys(errors).length) fail(errors);
   if (Object.keys(data).length === 0) throw new ApiError(400, "Tidak ada field yang diubah");
 
   const row = await prisma.wdRecord.update({ where: { id }, data });
+
+  // SN bisa berubah saat edit: unit lama kembali siap, unit baru jadi dipinjam.
+  if (row.isWeapon) {
+    if (current.serialNumber && current.serialNumber !== row.serialNumber) {
+      await setVaultStatus(current.serialNumber, VaultStatus.SIAP);
+    }
+    await setVaultStatus(row.serialNumber, VaultStatus.DIPINJAM);
+  }
   return serialize(row);
 }
 
@@ -500,6 +578,7 @@ export async function returnWd(id: number, input: Record<string, unknown>) {
       returnedBy: "web",
     },
   });
+  await setVaultStatus(row.serialNumber, VaultStatus.SIAP);
   return serialize(row);
 }
 
@@ -519,13 +598,21 @@ export async function markWdLost(id: number, input: Record<string, unknown>) {
     where: { id },
     data: { status: WdStatus.HILANG, lostReason },
   });
+  await setVaultStatus(row.serialNumber, VaultStatus.HILANG);
   return serialize(row);
 }
 
 export async function deleteWd(id: number) {
-  const row = await prisma.wdRecord.findUnique({ where: { id }, select: { code: true } });
+  const row = await prisma.wdRecord.findUnique({
+    where: { id },
+    select: { code: true, status: true, isWeapon: true, serialNumber: true },
+  });
   if (!row) throw new ApiError(404, "Transaksi WD tidak ditemukan");
   await prisma.wdRecord.delete({ where: { id } });
+  // Kalau transaksi yang dihapus masih dipinjam, unitnya kembali tersedia.
+  if (row.status === WdStatus.DIPINJAM) {
+    await setVaultStatus(row.serialNumber, VaultStatus.SIAP);
+  }
   return { id, code: row.code };
 }
 
@@ -546,6 +633,23 @@ export async function setWdDiscordMessage(id: number, messageId: unknown) {
   const row = await prisma.wdRecord.update({
     where: { id },
     data: { discordMessageId: messageId as string | null },
+  });
+  return serialize(row);
+}
+
+/**
+ * Tandai bahwa pengingat keterlambatan sudah dikirim ke Discord.
+ * Dipakai bot agar tidak mengirim pengingat yang sama berkali-kali.
+ */
+export async function markWdReminder(id: number) {
+  const current = await prisma.wdRecord.findUnique({ where: { id } });
+  if (!current) throw new ApiError(404, "Transaksi WD tidak ditemukan");
+  if (current.status !== WdStatus.DIPINJAM) {
+    throw new ApiError(409, "Hanya transaksi yang masih dipinjam yang bisa diingatkan");
+  }
+  const row = await prisma.wdRecord.update({
+    where: { id },
+    data: { reminderAt: new Date() },
   });
   return serialize(row);
 }

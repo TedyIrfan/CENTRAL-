@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { api, ApiRequestError } from "@/lib/api-client";
 import { STATUS_OPTIONS, type GroupMember, type MemberStatus, type Position } from "@/lib/types";
 import { Modal } from "@/components/modal";
-import { Button, Field, inputClass } from "@/components/ui";
+import { Button, Field, inputClass, selectClass } from "@/components/ui";
 import { useToast } from "@/components/toast";
 
 export type EditingMember = GroupMember & { positionId: number };
@@ -35,12 +35,6 @@ export function MemberForm({
   const [autoStatus, setAutoStatus] = useState<MemberStatus | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-
-  const willDemote =
-    !!member &&
-    status === "DITURUNKAN" &&
-    member.status !== "DITURUNKAN" &&
-    positionId === member.positionId;
 
   // Pindah jabatan manual mengikuti aturan tombol naik/turun: turun -> Diturunkan,
   // naik dari Diturunkan -> Aktif. Selama admin belum mengubah status sendiri.
@@ -94,7 +88,7 @@ export function MemberForm({
 
   return (
     <Modal title={member ? "Edit anggota" : "Tambah anggota"} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-4">
+      <form onSubmit={submit} className="space-y-3">
         <Field label="Nama" error={errors.name}>
           <input
             className={inputClass}
@@ -104,19 +98,46 @@ export function MemberForm({
             placeholder="Nama anggota"
           />
         </Field>
-        <Field label="Jabatan" error={errors.positionId}>
-          <select
-            className={inputClass}
-            value={positionId}
-            onChange={(e) => changePosition(Number(e.target.value))}
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Jabatan" error={errors.positionId}>
+            <select
+              className={selectClass}
+              value={positionId}
+              onChange={(e) => changePosition(Number(e.target.value))}
+            >
+              {positions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field
+            label="Status"
+            error={errors.status}
+            hint={
+              autoStatus ? `Otomatis jadi "${autoStatusLabel}" karena jabatan berubah.` : undefined
+            }
           >
-            {positions.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </Field>
+            <select
+              className={selectClass}
+              value={status}
+              onChange={(e) => {
+                setStatusTouched(true);
+                setAutoStatus(null);
+                setStatus(e.target.value as MemberStatus);
+              }}
+            >
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+
         <Field
           label="Steam Hex"
           error={errors.hex}
@@ -129,7 +150,7 @@ export function MemberForm({
             placeholder="steam:110000112345678"
           />
         </Field>
-        <Field label="ID Discord" error={errors.discordId} hint="Opsional, angka 15-20 digit">
+        <Field label="ID Discord" error={errors.discordId} hint="Opsional, angka 15–20 digit">
           <input
             className={`${inputClass} font-mono`}
             value={discordId}
@@ -137,34 +158,8 @@ export function MemberForm({
             placeholder="123456789012345678"
           />
         </Field>
-        <Field
-          label="Status"
-          error={errors.status}
-          hint={
-            autoStatus
-              ? `Status otomatis disesuaikan menjadi "${autoStatusLabel}" karena jabatan berubah. Bisa diubah manual.`
-              : willDemote
-                ? "Jabatan akan otomatis turun satu tingkat."
-                : undefined
-          }
-        >
-          <select
-            className={inputClass}
-            value={status}
-            onChange={(e) => {
-              setStatusTouched(true);
-              setAutoStatus(null);
-              setStatus(e.target.value as MemberStatus);
-            }}
-          >
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <div className="flex justify-end gap-2 pt-2">
+
+        <div className="flex justify-end gap-2 pt-1">
           <Button type="button" onClick={onClose}>
             Batal
           </Button>

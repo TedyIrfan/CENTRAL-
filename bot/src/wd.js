@@ -69,6 +69,20 @@ export function wdEmbed(r, title) {
 
   if (r.returnNote) embed.addFields({ name: "Catatan kondisi", value: String(r.returnNote).slice(0, 1024) });
   if (r.lostReason) embed.addFields({ name: "Alasan hilang", value: String(r.lostReason).slice(0, 1024) });
+
+  if (r.isWeapon && r.dueAt) {
+    let value = fmtDate(r.dueAt);
+    if (r.status === "DIPINJAM") {
+      value += r.isOverdue
+        ? ` — ⚠️ terlambat ${r.daysLate} hari`
+        : r.daysLeft === 0
+          ? " — hari ini"
+          : ` — sisa ${r.daysLeft} hari`;
+    } else if (r.status === "DIKEMBALIKAN" && r.daysLate > 0) {
+      value += ` — dikembalikan terlambat ${r.daysLate} hari`;
+    }
+    embed.addFields({ name: "Tenggat kembali", value });
+  }
   return embed;
 }
 
@@ -157,7 +171,6 @@ export async function publishResultCard(client, record) {
 }
 
 // ---------- sinkronisasi web -> Discord ----------
-
 let syncQueue = Promise.resolve();
 let lastSync = new Date(Date.now() - 5 * 60_000).toISOString();
 
@@ -199,6 +212,68 @@ async function doSync(client, force) {
     }
   }
   if (edited) console.log(`[wd] ${edited} kartu diperbarui`);
+}
+
+// ---------- pengingat keterlambatan ----------
+
+const REMINDER_GAP_MS = 20 * 60 * 60_000; // maksimal sekali per ~20 jam per transaksi
+const REMINDER_MAX_PER_RUN = 10;
+
+let reminderQueue = Promise.resolve();
+
+/**
+ * Kirim pengingat ke channel WD untuk senjata yang sudah melewati tenggat 3 hari.
+ * Dijalankan tiap 30 menit; reminderAt di database mencegah spam saat bot restart.
+ */
+export function syncWdReminders(client) {
+  reminderQueue = reminderQueue
+    .then(() => doRemind(client))
+    .catch((err) => console.error("[wd] gagal mengirim pengingat:", err.message ?? err));
+  return reminderQueue;
+}
+
+async function memberDiscordId(memberId) {
+  if (!memberId) return null;
+  try {
+    const { data } = await api(`/api/members/${memberId}`);
+    return data.discordId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function doRemind(client) {
+  // Nonaktif secara default; lihat WD_REMINDER_ENABLED di bot/src/index.js.
+  if (process.env.WD_REMINDER_ENABLED !== "1") return;
+  if (!wdChannelId()) return;
+  const { data } = await api("/api/wd?overdue=true&pageSize=100");
+  const now = Date.now();
+  const pending = data
+    .filter((r) => !r.reminderAt || now - new Date(r.reminderAt).getTime() >= REMINDER_GAP_MS)
+    .slice(0, REMINDER_MAX_PER_RUN);
+  if (pending.length === 0) return;
+
+  const channel = await client.channels.fetch(wdChannelId());
+  for (const r of pending) {
+    try {
+      const discordId = await memberDiscordId(r.memberId);
+      const who = discordId ? `<@${discordId}>` : `**${escapeMd(r.borrowerName)}**`;
+      const sn = r.serialNumber ? ` · SN \`${escapeMd(r.serialNumber)}\`` : "";
+      await channel.send({
+        content: [
+          "⚠️ **PENGEMBALIAN TERLAMBAT**",
+          `${who} — ${escapeMd(r.itemName)}${sn}`,
+          `Kode **${r.code}** · tenggat ${fmtDate(r.dueAt)} · **terlambat ${r.daysLate} hari**`,
+          "Segera kembalikan ke Berangkas.",
+        ].join("\n"),
+        allowedMentions: discordId ? { users: [discordId] } : { parse: [] },
+      });
+      await api(`/api/wd/${r.id}/reminder`, { method: "POST" });
+      console.log(`[wd] pengingat terlambat terkirim: ${r.code} (${r.daysLate} hari)`);
+    } catch (err) {
+      console.error(`[wd] pengingat ${r.code} gagal:`, err.message ?? err);
+    }
+  }
 }
 
 // ---------- resolusi & validasi ----------
@@ -326,8 +401,11 @@ export async function handleWdModal(interaction, deps) {
         return null;
       });
       await deps.sendLog(interaction, `↩️ **${data.code}** — ${escapeMd(data.borrowerName)} mengembalikan **${escapeMd(data.itemName)}**`);
+      const lateText = data.daysLate > 0 ? ` · terlambat ${data.daysLate} hari` : "";
       return interaction.editReply({
-        content: card ? `Kartu pengembalian: ${card.url}` : "Kartu pengembalian gagal dikirim ke channel WD.",
+        content: card
+          ? `Kartu pengembalian: ${card.url}${lateText}`
+          : "Kartu pengembalian gagal dikirim ke channel WD.",
         embeds: [wdEmbed(data, "✅ Barang dikembalikan")],
       });
     }
@@ -394,17 +472,18 @@ async function handleAmbil(interaction, deps) {
   });
 
   const { card, error } = await sendCardSafe(deps.client, data);
+  const dueText = data.isWeapon && data.dueAt ? ` · tenggat ${fmtDate(data.dueAt)}` : "";
   await deps.sendLog(
     interaction,
     `📦 **${data.code}** — ${escapeMd(data.borrowerName)} mengambil **${escapeMd(data.itemName)}**` +
       (data.serialNumber ? ` (SN \`${escapeMd(data.serialNumber)}\`)` : "") +
-      ` · qty ${data.qty}`,
+      ` · qty ${data.qty}${dueText}`,
   );
 
   return {
     reply: {
       content: card
-        ? `Kartu WD: ${card.url}`
+        ? `Kartu WD: ${card.url}${dueText}`
         : `Tercatat di database, tapi **kartu gagal dikirim** ke channel WD (${error}). ` +
           "Data tetap tampil di web; cek izin bot di channel WD.",
       embeds: [wdEmbed(data, "✅ WD tercatat")],
@@ -439,9 +518,12 @@ async function handleKembali(interaction, deps) {
   });
   await deps.sendLog(interaction, `↩️ **${data.code}** — ${escapeMd(data.borrowerName)} mengembalikan **${escapeMd(data.itemName)}**`);
 
+  const lateText = data.daysLate > 0 ? ` · terlambat ${data.daysLate} hari` : "";
   return {
     reply: {
-      content: card ? `Kartu pengembalian: ${card.url}` : "Kartu pengembalian gagal dikirim ke channel WD.",
+      content: card
+        ? `Kartu pengembalian: ${card.url}${lateText}`
+        : "Kartu pengembalian gagal dikirim ke channel WD.",
       embeds: [wdEmbed(data, "✅ Barang dikembalikan")],
     },
   };
@@ -479,7 +561,13 @@ async function handleCari(interaction) {
   const lines = data.map((r) => {
     const s = WD_STATUS[r.status] ?? WD_STATUS.DIPINJAM;
     const sn = r.serialNumber ? ` · \`${escapeMd(r.serialNumber)}\`` : "";
-    return `${s.emoji} **${r.code}** — ${escapeMd(r.borrowerName)} — ${escapeMd(r.itemName)}${sn}`;
+    const due =
+      r.isWeapon && r.dueAt
+        ? r.isOverdue
+          ? ` · ⚠️ telat ${r.daysLate} hari`
+          : ` · ⏰ ${fmtDate(r.dueAt)}`
+        : "";
+    return `${s.emoji} **${r.code}** — ${escapeMd(r.borrowerName)} — ${escapeMd(r.itemName)}${sn}${due}`;
   });
   const embed = new EmbedBuilder()
     .setColor(0xffffff)
@@ -496,11 +584,18 @@ async function handleDaftar() {
     embed.setDescription("Tidak ada barang yang masih dipinjam. 🎉");
   } else {
     embed.setDescription(
-      data
+      [...data]
+        .sort((a, b) => Number(b.isOverdue) - Number(a.isOverdue))
         .map((r) => {
           const sn = r.serialNumber ? ` · \`${escapeMd(r.serialNumber)}\`` : "";
           const dur = r.durabilityStart !== null ? ` · durab ${r.durabilityStart}%` : "";
-          return `🟡 **${r.code}** — ${escapeMd(r.borrowerName)} — ${escapeMd(r.itemName)}${sn}${dur}`;
+          const due =
+            r.isWeapon && r.dueAt
+              ? r.isOverdue
+                ? ` · ⚠️ telat ${r.daysLate} hari`
+                : ` · ⏰ ${fmtDate(r.dueAt)}`
+              : "";
+          return `🟡 **${r.code}** — ${escapeMd(r.borrowerName)} — ${escapeMd(r.itemName)}${sn}${dur}${due}`;
         })
         .join("\n"),
     );

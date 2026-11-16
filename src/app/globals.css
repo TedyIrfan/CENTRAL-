@@ -1,35 +1,99 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------
+   Central T — "kertas & tinta"
+   Palet dibangun dari logo (tinta hitam di atas kertas), bukan dari
+   template dashboard. Warna status satu-satunya warna dekoratif.
+   ------------------------------------------------------------------ */
+
 :root {
-  --background: #000000;
-  --foreground: #f4f4f5;
+  --paper: #f7f6f2;
+  --surface: #ffffff;
+  --surface-2: #f1efe9;
+
+  --ink: #14130f;
+  --ink-2: #4e4c45;
+  --ink-3: #7a776d;
+
+  --line: #e2dfd7;
+  --line-2: #cfcbc0;
+
+  --ok: #1d7a4c;
+  --ok-soft: #e7f2ec;
+  --warn: #8a5a00;
+  --warn-soft: #fbf0d8;
+  --bad: #a32e2a;
+  --bad-soft: #fbe9e7;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+
+  --radius-card: 10px;
+  --radius-field: 8px;
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 html {
-  color-scheme: dark;
+  color-scheme: light;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background-color: var(--paper);
+  color: var(--ink);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 ::selection {
-  background: rgb(255 255 255 / 0.28);
+  background: rgb(20 19 15 / 0.14);
 }
 
-@keyframes enter {
+/* Select native tetap dipakai (aksesibilitas + keyboard bawaan), panahnya diganti */
+.select-chevron {
+  appearance: none;
+  padding-right: 30px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%237a776d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  background-size: 13px 13px;
+}
+
+/* Angka rata kolom (tabel WD, statistik) */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Fokus keyboard yang jelas di semua elemen interaktif */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+@keyframes fade-in {
   from {
     opacity: 0;
-    transform: translateY(14px) scale(0.96);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -37,66 +101,26 @@ body {
   }
 }
 
-@keyframes glow-up {
+.fade-in {
+  animation: fade-in 0.18s ease-out both;
+}
+
+@keyframes flash-ring {
   0% {
-    box-shadow: 0 0 0 0 rgb(16 185 129 / 0.75);
+    box-shadow: 0 0 0 3px rgb(20 19 15 / 0.35);
   }
   100% {
-    box-shadow: 0 0 0 18px rgb(16 185 129 / 0);
+    box-shadow: 0 0 0 3px rgb(20 19 15 / 0);
   }
 }
 
-@keyframes glow-down {
-  0% {
-    box-shadow: 0 0 0 0 rgb(244 63 94 / 0.75);
-  }
-  100% {
-    box-shadow: 0 0 0 18px rgb(244 63 94 / 0);
-  }
-}
-
-@keyframes badge-pop {
-  0% {
-    opacity: 0;
-    transform: translateY(8px) scale(0.7);
-  }
-  12% {
-    opacity: 1;
-    transform: translateY(0) scale(1.08);
-  }
-  20% {
-    transform: scale(1);
-  }
-  85% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-}
-
-.animate-enter {
-  animation: enter 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
-.glow-up {
-  animation: glow-up 1s ease-out 0.55s 2;
-}
-
-.glow-down {
-  animation: glow-down 1s ease-out 0.55s 2;
-}
-
-.badge-pop {
-  animation: badge-pop 3s ease-out 0.4s both;
+.flash-ring {
+  animation: flash-ring 0.9s ease-out 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-enter,
-  .glow-up,
-  .glow-down,
-  .badge-pop {
+  .fade-in,
+  .flash-ring {
     animation: none;
   }
 }

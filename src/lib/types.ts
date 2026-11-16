@@ -1,10 +1,10 @@
 export type MemberStatus = "AKTIF" | "TIDAK_AKTIF" | "DITURUNKAN" | "TIDAK_DIKETAHUI";
 
 export const STATUS_OPTIONS: { value: MemberStatus; label: string; className: string }[] = [
-  { value: "AKTIF", label: "Aktif", className: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30" },
-  { value: "TIDAK_AKTIF", label: "Tidak Aktif", className: "bg-zinc-800 text-zinc-400 ring-zinc-600/60" },
-  { value: "DITURUNKAN", label: "Diturunkan", className: "bg-rose-500/15 text-rose-300 ring-rose-500/30" },
-  { value: "TIDAK_DIKETAHUI", label: "Tidak Diketahui", className: "bg-white/10 text-white ring-white/30" },
+  { value: "AKTIF", label: "Aktif", className: "border-ok/25 bg-ok-soft text-ok" },
+  { value: "TIDAK_AKTIF", label: "Tidak Aktif", className: "border-line-2 bg-surface-2 text-ink-3" },
+  { value: "DITURUNKAN", label: "Diturunkan", className: "border-bad/25 bg-bad-soft text-bad" },
+  { value: "TIDAK_DIKETAHUI", label: "Tidak Diketahui", className: "border-line-2 bg-surface text-ink-2" },
 ];
 
 export type Position = {
@@ -27,18 +27,17 @@ export type PositionGroup = Position & { members: GroupMember[] };
 
 export type WdStatus = "DIPINJAM" | "DIKEMBALIKAN" | "HILANG";
 
+/** Senjata wajib dikembalikan dalam 3 hari kalender sejak tanggal ambil. */
+export const WEAPON_DUE_DAYS = 3;
+
 export const WD_STATUS_OPTIONS: { value: WdStatus; label: string; className: string }[] = [
-  {
-    value: "DIPINJAM",
-    label: "Dipinjam",
-    className: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
-  },
+  { value: "DIPINJAM", label: "Dipinjam", className: "border-warn/25 bg-warn-soft text-warn" },
   {
     value: "DIKEMBALIKAN",
     label: "Dikembalikan",
-    className: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
+    className: "border-ok/25 bg-ok-soft text-ok",
   },
-  { value: "HILANG", label: "Hilang", className: "bg-rose-500/15 text-rose-300 ring-rose-500/30" },
+  { value: "HILANG", label: "Hilang", className: "border-bad/25 bg-bad-soft text-bad" },
 ];
 
 export type WdRecord = {
@@ -53,12 +52,17 @@ export type WdRecord = {
   durabilityStart: number | null;
   durabilityReturn: number | null;
   takenAt: string;
+  dueAt: string | null;
   returnedAt: string | null;
   purpose: string;
   returnNote: string | null;
   lostReason: string | null;
   status: WdStatus;
   discordMessageId: string | null;
+  reminderAt: string | null;
+  isOverdue: boolean;
+  daysLate: number;
+  daysLeft: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -67,6 +71,7 @@ export type WdStats = {
   dipinjam: number;
   kembaliBulanIni: number;
   hilang: number;
+  terlambat: number;
   total: number;
 };
 
@@ -83,6 +88,7 @@ export type Activity = {
   title: string;
   negotiation: string | null;
   activityDate: string;
+  discordMessageId: string | null;
   participants: ActivityParticipant[];
   createdAt: string;
   updatedAt: string;
@@ -92,4 +98,33 @@ export type ActivityStats = {
   kegiatanBulanIni: number;
   pesertaBulanIni: number;
   total: number;
+};
+
+export type VaultStatus = "SIAP" | "DIPINJAM" | "HILANG" | "RUSAK";
+
+export const VAULT_STATUS_OPTIONS: { value: VaultStatus; label: string; className: string }[] = [
+  { value: "SIAP", label: "Siap", className: "border-ok/25 bg-ok-soft text-ok" },
+  { value: "DIPINJAM", label: "Dipinjam", className: "border-warn/25 bg-warn-soft text-warn" },
+  { value: "HILANG", label: "Hilang", className: "border-bad/25 bg-bad-soft text-bad" },
+  { value: "RUSAK", label: "Rusak", className: "border-line-2 bg-surface-2 text-ink-3" },
+];
+
+export type VaultItem = {
+  id: number;
+  name: string;
+  serialNumber: string | null;
+  isWeapon: boolean;
+  durability: number | null;
+  status: VaultStatus;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type VaultStats = {
+  total: number;
+  siap: number;
+  dipinjam: number;
+  hilang: number;
+  rusak: number;
 };

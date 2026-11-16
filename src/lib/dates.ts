@@ -51,3 +51,32 @@ export function toDateInput(value: string | Date | null | undefined): string {
 export function compactDate(value: Date): string {
   return value.toISOString().slice(0, 10).replaceAll("-", "");
 }
+
+/** Tambah sejumlah hari kalender. */
+export function addDays(value: Date, days: number): Date {
+  return new Date(value.getTime() + days * 86_400_000);
+}
+
+/** YYYY-MM-DD + N hari -> YYYY-MM-DD ("" kalau input tidak valid). */
+export function addDaysIso(value: string, days: number): string {
+  const date = parseDateInput(value);
+  if (!date) return "";
+  return toDateInput(addDays(date, days));
+}
+
+/** Selisih hari kalender (later - earlier), minimal 0. */
+export function daysBetween(
+  later: string | Date | null | undefined,
+  earlier: string | Date | null | undefined,
+): number {
+  const a = asUtcDate(later);
+  const b = asUtcDate(earlier);
+  if (!a || !b) return 0;
+  return Math.max(0, Math.round((a.getTime() - b.getTime()) / 86_400_000));
+}
+
+function asUtcDate(value: string | Date | null | undefined): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return parseDateInput(value.toISOString().slice(0, 10));
+  return parseDateInput(String(value).slice(0, 10));
+}

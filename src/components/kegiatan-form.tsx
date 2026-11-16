@@ -63,12 +63,8 @@ export function ActivityFormModal({ members, suggestions, activity, onClose, onS
   }
 
   return (
-    <Modal
-      title={activity ? `Edit ${activity.code}` : "Catat kegiatan"}
-      onClose={onClose}
-      size="lg"
-    >
-      <form onSubmit={submit} className="space-y-3.5">
+    <Modal title={activity ? `Edit ${activity.code}` : "Catat kegiatan"} onClose={onClose} size="lg">
+      <form onSubmit={submit} className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Tanggal kegiatan" error={errors.activityDate}>
             <input

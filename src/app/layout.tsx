@@ -28,7 +28,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         <ToastProvider>
           <Nav />
-          <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">{children}</main>
+          <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-4">{children}</main>
         </ToastProvider>
       </body>
     </html>

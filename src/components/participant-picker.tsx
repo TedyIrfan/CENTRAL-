@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import type { MemberOption } from "@/components/member-picker";
 import { inputClass } from "@/components/ui";
+import { IconArrowDown, IconArrowUp, IconPlus, IconX } from "@/components/icons";
 
 export type ParticipantDraft = { memberId: number | null; name: string };
 
@@ -25,10 +26,7 @@ export function ParticipantPicker({ members, value, onChange, error }: Props) {
     () => new Set(value.flatMap((p) => (p.memberId === null ? [] : [p.memberId]))),
     [value],
   );
-  const selectedNames = useMemo(
-    () => new Set(value.map((p) => p.name.toLowerCase())),
-    [value],
-  );
+  const selectedNames = useMemo(() => new Set(value.map((p) => p.name.toLowerCase())), [value]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -106,8 +104,8 @@ export function ParticipantPicker({ members, value, onChange, error }: Props) {
   return (
     <div>
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-sm font-medium text-zinc-300">Nama anggota</span>
-        <span className="text-[11px] text-zinc-500">{value.length}/50 peserta</span>
+        <span className="text-[12px] font-medium text-ink-2">Nama anggota</span>
+        <span className="tnum text-[11px] text-ink-3">{value.length}/50 peserta</span>
       </div>
 
       <div className="relative">
@@ -138,27 +136,27 @@ export function ParticipantPicker({ members, value, onChange, error }: Props) {
             ref={listRef}
             id="participant-picker-list"
             role="listbox"
-            className="mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-white/10 bg-zinc-950 py-1 shadow-xl"
+            className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-field border border-line bg-surface py-1 shadow-[0_18px_40px_-24px_rgb(20_19_15_/0.45)]"
           >
             {filtered.map((m, i) => (
               <li
                 key={m.id}
                 role="option"
                 aria-selected={i === activeIndex}
-                className={`flex cursor-pointer flex-col gap-0.5 px-3 py-1.5 ${
-                  i === activeIndex ? "bg-white/10 text-white" : "text-zinc-300"
+                className={`flex cursor-pointer flex-col gap-0.5 px-2.5 py-1.5 ${
+                  i === activeIndex ? "bg-surface-2 text-ink" : "text-ink-2"
                 }`}
                 onMouseDown={(e) => e.preventDefault()}
                 onMouseEnter={() => setActive(i)}
                 onClick={() => choose(i)}
               >
-                <span className="truncate text-sm">{m.name}</span>
-                <span className="text-[11px] text-zinc-500">{m.position.name}</span>
+                <span className="truncate text-[12.5px]">{m.name}</span>
+                <span className="text-[10.5px] text-ink-3">{m.position.name}</span>
               </li>
             ))}
 
             {filtered.length === 0 && !canAddManual && (
-              <li className="px-3 py-2 text-sm text-zinc-500">
+              <li className="px-2.5 py-2 text-[12.5px] text-ink-3">
                 {query.trim() ? "Tidak ada anggota yang cocok." : "Semua anggota sudah dipilih."}
               </li>
             )}
@@ -167,16 +165,16 @@ export function ParticipantPicker({ members, value, onChange, error }: Props) {
               <li
                 role="option"
                 aria-selected={activeIndex === filtered.length}
-                className={`flex cursor-pointer items-center gap-2 border-t border-white/5 px-3 py-2 text-sm ${
-                  activeIndex === filtered.length
-                    ? "bg-white/10 text-white"
-                    : "text-zinc-300"
+                className={`flex cursor-pointer items-center gap-1.5 border-t border-line px-2.5 py-1.5 text-[12.5px] ${
+                  activeIndex === filtered.length ? "bg-surface-2 text-ink" : "text-ink-2"
                 }`}
                 onMouseDown={(e) => e.preventDefault()}
                 onMouseEnter={() => setActive(filtered.length)}
                 onClick={() => choose(filtered.length)}
               >
-                <span className="text-emerald-400">+</span>
+                <span className="text-ok">
+                  <IconPlus size={12} />
+                </span>
                 <span className="truncate">
                   Tambah <b>“{trimmed}”</b> (non-anggota)
                 </span>
@@ -187,20 +185,22 @@ export function ParticipantPicker({ members, value, onChange, error }: Props) {
       </div>
 
       {value.length === 0 ? (
-        <p className="mt-2 rounded-lg border border-dashed border-white/10 px-3 py-3 text-center text-xs text-zinc-500">
+        <p className="mt-1.5 rounded-field border border-dashed border-line-2 px-3 py-2.5 text-center text-[11.5px] text-ink-3">
           Belum ada peserta. Cari anggota atau ketik nama baru di atas.
         </p>
       ) : (
-        <ol className="mt-2 space-y-1">
+        <ol className="mt-1.5 space-y-1">
           {value.map((p, i) => (
             <li
               key={`${p.memberId ?? "manual"}-${p.name}-${i}`}
-              className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5"
+              className="flex items-center gap-1.5 rounded-field border border-line bg-surface px-2 py-1"
             >
-              <span className="w-6 shrink-0 text-right font-mono text-xs text-zinc-500">{i + 1}.</span>
-              <span className="min-w-0 flex-1 truncate text-sm text-zinc-200">{p.name}</span>
+              <span className="tnum w-5 shrink-0 text-right font-mono text-[10.5px] text-ink-3">
+                {i + 1}.
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">{p.name}</span>
               {p.memberId === null && (
-                <span className="shrink-0 rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-zinc-500 ring-1 ring-white/10">
+                <span className="shrink-0 rounded border border-line-2 px-1 text-[9.5px] uppercase tracking-wide text-ink-3">
                   manual
                 </span>
               )}
@@ -210,9 +210,9 @@ export function ParticipantPicker({ members, value, onChange, error }: Props) {
                 title="Naikkan"
                 disabled={i === 0}
                 onClick={() => move(i, -1)}
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[11px] text-zinc-500 transition hover:bg-white/10 hover:text-white disabled:opacity-30"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[5px] text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-25"
               >
-                ↑
+                <IconArrowUp size={11} />
               </button>
               <button
                 type="button"
@@ -220,18 +220,18 @@ export function ParticipantPicker({ members, value, onChange, error }: Props) {
                 title="Turunkan"
                 disabled={i === value.length - 1}
                 onClick={() => move(i, 1)}
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[11px] text-zinc-500 transition hover:bg-white/10 hover:text-white disabled:opacity-30"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[5px] text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-25"
               >
-                ↓
+                <IconArrowDown size={11} />
               </button>
               <button
                 type="button"
                 aria-label={`Hapus ${p.name}`}
                 title="Hapus"
                 onClick={() => remove(i)}
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[11px] text-zinc-500 transition hover:bg-rose-500/20 hover:text-rose-300"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[5px] text-ink-3 transition-colors hover:bg-bad-soft hover:text-bad"
               >
-                ✕
+                <IconX size={11} />
               </button>
             </li>
           ))}
@@ -239,9 +239,9 @@ export function ParticipantPicker({ members, value, onChange, error }: Props) {
       )}
 
       {error ? (
-        <span className="mt-1 block text-xs text-rose-400">{error}</span>
+        <span className="mt-1 block text-[11.5px] text-bad">{error}</span>
       ) : (
-        <span className="mt-1 block text-xs text-zinc-500">
+        <span className="mt-1 block text-[11.5px] text-ink-3">
           Ketik untuk mencari anggota, atau tambahkan nama non-anggota. Urutan bisa diubah.
         </span>
       )}

@@ -1,5 +1,5 @@
 // Uji end-to-end API jabatan. Jalankan: node scripts/test-positions.mjs [baseUrl]
-const base = process.argv[2] ?? "http://localhost:3000";
+const base = process.argv[2] ?? "http://localhost:3001";
 let failed = 0;
 
 async function call(method, path, body) {

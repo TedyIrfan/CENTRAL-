@@ -2,24 +2,44 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api-client";
-import {
-  WD_STATUS_OPTIONS,
-  type PositionGroup,
-  type WdRecord,
-  type WdStats,
-} from "@/lib/types";
+import { WD_STATUS_OPTIONS, type PositionGroup, type WdRecord, type WdStats } from "@/lib/types";
 import { formatDateId } from "@/lib/dates";
 import { WdFormModal, type MemberOption } from "@/components/wd-form";
 import { WdLostModal, WdReturnModal } from "@/components/wd-return";
 import { WdDetailModal } from "@/components/wd-detail";
 import { Modal } from "@/components/modal";
-import { Button, inputClass } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  EmptyState,
+  IconButton,
+  PageHeader,
+  Panel,
+  SearchInput,
+  Stat,
+  StatStrip,
+  inputClass,
+  selectClass,
+  tableClass,
+  tdClass,
+  thClass,
+  theadRowClass,
+} from "@/components/ui";
+import {
+  IconAlert,
+  IconCopy,
+  IconPencil,
+  IconPlus,
+  IconTrash,
+  IconUndo,
+} from "@/components/icons";
 import { useToast } from "@/components/toast";
 
 type Meta = { page: number; pageSize: number; total: number; totalPages: number };
 
 export default function WdPage() {
   const toast = useToast();
+
   const [records, setRecords] = useState<WdRecord[]>([]);
   const [meta, setMeta] = useState<Meta>({ page: 1, pageSize: 20, total: 0, totalPages: 0 });
   const [stats, setStats] = useState<WdStats | null>(null);
@@ -33,6 +53,7 @@ export default function WdPage() {
   const [status, setStatus] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [overdue, setOverdue] = useState(false);
   const [page, setPage] = useState(1);
 
   const [form, setForm] = useState<{ record?: WdRecord } | null>(null);
@@ -52,6 +73,7 @@ export default function WdPage() {
     if (status) qs.set("status", status);
     if (from) qs.set("from", from);
     if (to) qs.set("to", to);
+    if (overdue) qs.set("overdue", "1");
     qs.set("page", String(page));
     try {
       const [list, st] = await Promise.all([
@@ -67,7 +89,7 @@ export default function WdPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, status, from, to, page]);
+  }, [search, status, from, to, overdue, page]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -112,45 +134,58 @@ export default function WdPage() {
     }
   }
 
-  const filtering = Boolean(search || status || from || to);
+  const filtering = Boolean(search || status || from || to || overdue);
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Withdraw Barang</h1>
-          <p className="text-sm text-zinc-500">
-            Pengambilan &amp; pengembalian barang. {loading ? "Memuat…" : `${meta.total} transaksi.`}
-          </p>
-        </div>
-        <Button variant="primary" onClick={() => setForm({})}>
-          + Ambil barang
-        </Button>
-      </div>
+      <PageHeader
+        title="Withdraw Barang"
+        description={
+          loading ? "Memuat…" : `${meta.total} transaksi${filtering ? " (terfilter)" : ""}`
+        }
+        actions={
+          <Button variant="primary" onClick={() => setForm({})}>
+            <IconPlus /> Ambil barang
+          </Button>
+        }
+      />
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
-        <StatCard label="Masih dipinjam" value={stats?.dipinjam} accent="text-amber-300" />
-        <StatCard label="Kembali bulan ini" value={stats?.kembaliBulanIni} accent="text-emerald-300" />
-        <StatCard label="Hilang" value={stats?.hilang} accent="text-rose-300" />
-      </div>
+      <StatStrip>
+        <Stat label="Masih dipinjam" value={stats?.dipinjam} />
+        <Stat
+          label="Terlambat"
+          value={stats?.terlambat}
+          tone={stats?.terlambat ? "text-bad" : "text-ink"}
+          onClick={() => {
+            setOverdue((v) => !v);
+            setStatus("");
+            setPage(1);
+          }}
+          active={overdue}
+        />
+        <Stat label="Kembali bulan ini" value={stats?.kembaliBulanIni} />
+        <Stat label="Hilang" value={stats?.hilang} tone={stats?.hilang ? "text-bad" : "text-ink"} />
+      </StatStrip>
 
-      <div className="mb-5 grid gap-2 sm:grid-cols-[1fr_160px_160px_160px]">
-        <input
-          className={inputClass}
+      <div className="mb-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px_150px_150px]">
+        <SearchInput
           placeholder="Cari kode, nama, barang, atau SN…"
           value={searchInput}
           onChange={(e) => {
             setSearchInput(e.target.value);
             setPage(1);
           }}
+          aria-label="Cari transaksi"
         />
         <select
-          className={inputClass}
+          className={selectClass}
           value={status}
           onChange={(e) => {
             setStatus(e.target.value);
+            setOverdue(false);
             setPage(1);
           }}
+          aria-label="Filter status"
         >
           <option value="">Semua status</option>
           {WD_STATUS_OPTIONS.map((s) => (
@@ -163,6 +198,7 @@ export default function WdPage() {
           className={inputClass}
           type="date"
           title="Dari tanggal ambil"
+          aria-label="Dari tanggal ambil"
           value={from}
           onChange={(e) => {
             setFrom(e.target.value);
@@ -173,6 +209,7 @@ export default function WdPage() {
           className={inputClass}
           type="date"
           title="Sampai tanggal ambil"
+          aria-label="Sampai tanggal ambil"
           value={to}
           onChange={(e) => {
             setTo(e.target.value);
@@ -181,108 +218,165 @@ export default function WdPage() {
         />
       </div>
 
+      {overdue && (
+        <div className="mb-3 flex items-center gap-2 rounded-field border border-bad/25 bg-bad-soft px-3 py-1.5 text-[12px] text-bad">
+          <IconAlert size={13} />
+          Menampilkan hanya senjata yang terlambat dikembalikan.
+          <button
+            type="button"
+            className="underline"
+            onClick={() => {
+              setOverdue(false);
+              setPage(1);
+            }}
+          >
+            tampilkan semua
+          </button>
+        </div>
+      )}
+
       {error && (
-        <div className="mb-4 rounded-lg border border-rose-500/30 bg-rose-950/50 p-4 text-sm text-rose-200">
-          {error}{" "}
-          <button className="underline" onClick={() => load()}>
-            Coba lagi
+        <div className="mb-3 flex items-center gap-2 rounded-field border border-bad/25 bg-bad-soft px-3 py-2 text-[12.5px] text-bad">
+          {error}
+          <button type="button" className="underline" onClick={() => load()}>
+            coba lagi
           </button>
         </div>
       )}
 
       {!loading && !error && records.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-white/10 p-10 text-center text-sm text-zinc-500">
-          {filtering ? "Tidak ada transaksi yang cocok." : "Belum ada transaksi WD. Klik “Ambil barang”."}
-        </div>
+        <EmptyState>
+          {filtering
+            ? "Tidak ada transaksi yang cocok."
+            : "Belum ada transaksi WD. Klik “Ambil barang”."}
+        </EmptyState>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-white/10 bg-zinc-900/50">
-          <table className="w-full min-w-[880px] text-sm">
-            <thead>
-              <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-zinc-500">
-                <th className="px-4 py-2.5 font-medium">Kode</th>
-                <th className="px-4 py-2.5 font-medium">Peminjam</th>
-                <th className="px-4 py-2.5 font-medium">Barang</th>
-                <th className="px-4 py-2.5 font-medium">Qty</th>
-                <th className="px-4 py-2.5 font-medium">Durab</th>
-                <th className="px-4 py-2.5 font-medium">Ambil</th>
-                <th className="px-4 py-2.5 font-medium">Kembali</th>
-                <th className="px-4 py-2.5 font-medium">Status</th>
-                <th className="px-4 py-2.5 text-right font-medium">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {records.map((r) => {
-                const s = WD_STATUS_OPTIONS.find((o) => o.value === r.status);
-                return (
-                  <tr key={r.id} className="hover:bg-white/[0.03]">
-                    <td className="whitespace-nowrap px-4 py-2.5 font-mono text-[11px] text-zinc-500">
-                      {r.code}
-                    </td>
-                    <td className="px-4 py-2.5 font-medium">{r.borrowerName}</td>
-                    <td className="px-4 py-2.5">
-                      <div className="text-zinc-200">{r.itemName}</div>
-                      <div className="truncate font-mono text-[11px] text-zinc-500">
-                        {r.isWeapon ? (r.serialNumber ?? "—") : "non-senjata"}
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-zinc-300">{r.qty} PCS</td>
-                    <td className="whitespace-nowrap px-4 py-2.5 font-mono text-[11px] text-zinc-400">
-                      {durabText(r)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-zinc-400">
-                      {formatDateId(r.takenAt)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-zinc-400">
-                      {formatDateId(r.returnedAt)}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${s?.className}`}
-                      >
-                        {s?.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex justify-end gap-0.5">
-                        <RowBtn label="Detail / salin format" onClick={() => setDetail(r)}>
-                          ⧉
-                        </RowBtn>
-                        {r.status === "DIPINJAM" && (
-                          <>
-                            <RowBtn label="Kembalikan" onClick={() => setReturning(r)}>
-                              ↩
-                            </RowBtn>
-                            <RowBtn label="Tandai hilang" danger onClick={() => setLosing(r)}>
-                              ⚠
-                            </RowBtn>
-                            <RowBtn label="Edit" onClick={() => setForm({ record: r })}>
-                              ✎
-                            </RowBtn>
-                          </>
+        <Panel>
+          <div className="overflow-x-auto">
+            <table className={`${tableClass} min-w-[1080px]`}>
+              <thead>
+                <tr className={theadRowClass}>
+                  <th className={thClass}>Kode</th>
+                  <th className={thClass}>Peminjam</th>
+                  <th className={thClass}>Barang</th>
+                  <th className={`${thClass} text-right`}>Qty</th>
+                  <th className={thClass}>Durab</th>
+                  <th className={thClass}>Ambil</th>
+                  <th className={thClass}>Tenggat</th>
+                  <th className={thClass}>Kembali</th>
+                  <th className={thClass}>Status</th>
+                  <th className={`${thClass} text-right`}>Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {records.map((r) => {
+                  const s = WD_STATUS_OPTIONS.find((o) => o.value === r.status);
+                  const late = r.isOverdue || (r.status === "DIKEMBALIKAN" && r.daysLate > 0);
+                  return (
+                    <tr
+                      key={r.id}
+                      className={`border-b border-line/60 last:border-0 ${
+                        r.isOverdue ? "bg-warn-soft/50" : "hover:bg-surface-2/50"
+                      }`}
+                    >
+                      <td className={`${tdClass} whitespace-nowrap font-mono text-[11px] text-ink-3`}>
+                        {r.code}
+                      </td>
+                      <td className={`${tdClass} whitespace-nowrap font-medium`}>
+                        {r.borrowerName}
+                      </td>
+                      <td className={tdClass}>
+                        <div className="text-ink">{r.itemName}</div>
+                        <div className="truncate font-mono text-[10.5px] text-ink-3">
+                          {r.isWeapon ? (r.serialNumber ?? "—") : "non-senjata"}
+                        </div>
+                      </td>
+                      <td className={`${tdClass} tnum whitespace-nowrap text-right text-ink-2`}>
+                        {r.qty}
+                      </td>
+                      <td className={`${tdClass} tnum whitespace-nowrap font-mono text-[11px] text-ink-2`}>
+                        {durabText(r)}
+                      </td>
+                      <td className={`${tdClass} tnum whitespace-nowrap text-ink-2`}>
+                        {formatDateId(r.takenAt)}
+                      </td>
+                      <td className={`${tdClass} tnum whitespace-nowrap text-[12px]`}>
+                        {r.isWeapon && r.dueAt ? (
+                          <div className={late ? "text-bad" : "text-ink-2"}>
+                            {formatDateId(r.dueAt)}
+                            <div className="text-[10.5px] text-ink-3">
+                              {r.status === "DIPINJAM"
+                                ? r.isOverdue
+                                  ? `terlambat ${r.daysLate} hari`
+                                  : r.daysLeft === 0
+                                    ? "hari ini"
+                                    : `sisa ${r.daysLeft} hari`
+                                : r.status === "DIKEMBALIKAN" && r.daysLate > 0
+                                  ? `telat ${r.daysLate} hari`
+                                  : ""}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-ink-3">—</span>
                         )}
-                        <RowBtn label="Hapus" danger onClick={() => setDeleting(r)}>
-                          🗑
-                        </RowBtn>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      </td>
+                      <td className={`${tdClass} tnum whitespace-nowrap text-ink-2`}>
+                        {formatDateId(r.returnedAt)}
+                      </td>
+                      <td className={tdClass}>
+                        <Badge className={s?.className}>{s?.label}</Badge>
+                      </td>
+                      <td className={`${tdClass} text-right`}>
+                        <div className="flex justify-end gap-0.5">
+                          <IconButton label="Detail / salin format" onClick={() => setDetail(r)}>
+                            <IconCopy size={14} />
+                          </IconButton>
+                          {r.status === "DIPINJAM" && (
+                            <>
+                              <IconButton label="Kembalikan" onClick={() => setReturning(r)}>
+                                <IconUndo size={14} />
+                              </IconButton>
+                              <IconButton
+                                label="Tandai hilang"
+                                tone="danger"
+                                onClick={() => setLosing(r)}
+                              >
+                                <IconAlert size={14} />
+                              </IconButton>
+                              <IconButton label="Edit" onClick={() => setForm({ record: r })}>
+                                <IconPencil size={14} />
+                              </IconButton>
+                            </>
+                          )}
+                          <IconButton
+                            label="Hapus"
+                            tone="danger"
+                            onClick={() => setDeleting(r)}
+                          >
+                            <IconTrash size={14} />
+                          </IconButton>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
-        <span>
-          {meta.total} transaksi
-          {filtering ? " (terfilter)" : ""} · halaman {meta.page} dari {meta.totalPages || 1}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-ink-3">
+        <span className="tnum">
+          {meta.total} transaksi{filtering ? " (terfilter)" : ""} · halaman {meta.page} dari{" "}
+          {meta.totalPages || 1}
         </span>
         <div className="flex gap-2">
-          <Button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+          <Button size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
             Sebelumnya
           </Button>
           <Button
+            size="sm"
             disabled={meta.totalPages === 0 || page >= meta.totalPages}
             onClick={() => setPage((p) => p + 1)}
           >
@@ -331,10 +425,11 @@ export default function WdPage() {
 
       {deleting && (
         <Modal title="Hapus transaksi WD?" onClose={() => setDeleting(null)}>
-          <p className="text-sm text-zinc-300">
-            <b>{deleting.code}</b> — {deleting.borrowerName} ({deleting.itemName}) akan dihapus permanen.
+          <p className="text-[13px] text-ink-2">
+            <b className="text-ink">{deleting.code}</b> — {deleting.borrowerName} (
+            {deleting.itemName}) akan dihapus permanen.
           </p>
-          <div className="mt-5 flex justify-end gap-2">
+          <div className="mt-4 flex justify-end gap-2">
             <Button onClick={() => setDeleting(null)}>Batal</Button>
             <Button variant="danger" onClick={confirmDelete}>
               Hapus
@@ -351,45 +446,4 @@ function durabText(r: WdRecord) {
   const start = r.durabilityStart === null ? "—" : `${r.durabilityStart}%`;
   const end = r.durabilityReturn === null ? "—" : `${r.durabilityReturn}%`;
   return `${start} → ${end}`;
-}
-
-function StatCard({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value?: number;
-  accent: string;
-}) {
-  return (
-    <div className="rounded-xl border border-white/10 bg-zinc-900/50 px-4 py-3">
-      <div className="text-xs text-zinc-500">{label}</div>
-      <div className={`mt-1 text-2xl font-bold ${accent}`}>{value ?? "—"}</div>
-    </div>
-  );
-}
-
-function RowBtn({
-  label,
-  danger,
-  ...props
-}: {
-  label: string;
-  danger?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      {...props}
-      title={label}
-      aria-label={label}
-      className={`flex h-8 w-8 items-center justify-center rounded-md text-sm transition ${
-        danger
-          ? "text-zinc-400 hover:bg-rose-500/20 hover:text-rose-300"
-          : "text-zinc-400 hover:bg-white/10 hover:text-white"
-      }`}
-    />
-  );
 }

@@ -12,8 +12,10 @@ import { handleAddButton, handleContextAdd } from "./tambah.js";
 import { buildDeleteConfirm, handleDeleteButton } from "./hapus.js";
 import { handleRegistrationMessage } from "./daftar.js";
 import { STATUS, escapeMd } from "./format.js";
+import { handleKegiatanCommand, handleKegiatanMessage, kegiatanChannelId } from "./kegiatan.js";
 import { refreshStruktur, structureLink } from "./struktur.js";
-import { handleWd, handleWdButton, handleWdModal, syncWdCards, wdChannelId } from "./wd.js";
+import { handleWd, handleWdButton, handleWdModal, syncWdCards, syncWdReminders, wdChannelId } from "./wd.js";
+import { handleWdMessage } from "./wd-message.js";
 
 const { DISCORD_TOKEN, DISCORD_GUILD_ID, STRUKTUR_CHANNEL_ID } = process.env;
 for (const [k, v] of Object.entries({ DISCORD_TOKEN, DISCORD_GUILD_ID, STRUKTUR_CHANNEL_ID })) {
@@ -29,23 +31,36 @@ const ALLOWED_USERS = csv(process.env.ALLOWED_USER_IDS);
 const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID || null;
 const REFRESH_MS = 5 * 60_000;
 
+// Pengingat "PENGEMBALIAN TERLAMBAT" di channel WD: MATI secara default (16 Nov 2026).
+// Nyalakan lagi dengan WD_REMINDER_ENABLED=1 di .env kalau nanti dibutuhkan.
+const WD_REMINDER_ENABLED = process.env.WD_REMINDER_ENABLED === "1";
+
 // Channel pendaftaran otomatis: pesan berformat langsung masuk database.
 const DAFTAR_CHANNEL_ID = process.env.DAFTAR_CHANNEL_ID || null;
 
-// Channel WD: kartu pengambilan/pengembalian barang dikirim & diedit di sini.
+// Channel WD: kartu pengambilan/pengembalian + auto-catat format dari chat.
 if (!wdChannelId()) {
-  console.warn("[wd] WD_CHANNEL_ID belum diisi — kartu WD tidak dikirim ke Discord.");
+  console.warn("[wd] WD_CHANNEL_ID belum diisi — kartu & auto-catat WD nonaktif.");
 } else {
-  console.log(`[wd] kartu WD aktif di channel ${wdChannelId()}`);
+  console.log(`[wd] kartu & auto-catat WD aktif di channel ${wdChannelId()}`);
+}
+
+// Channel kegiatan: pesan berformat baku langsung dicatat & diberi reaksi ✅.
+if (!kegiatanChannelId()) {
+  console.warn("[kegiatan] KEGIATAN_CHANNEL_ID belum diisi — auto-catat kegiatan nonaktif.");
+} else {
+  console.log(`[kegiatan] auto-catat aktif di channel ${kegiatanChannelId()}`);
 }
 
 // Catatan: field `flags` di /applications/@me tidak bisa diandalkan untuk intent ini
 // (pernah dilaporkan "limited" padahal sudah aktif dan gateway menerima). Jadi selama
 // DAFTAR_CHANNEL_ID diisi, kita minta intent-nya; kalau Discord menolak, error-nya jelas.
 const intents = [GatewayIntentBits.Guilds];
-if (DAFTAR_CHANNEL_ID) {
+if (DAFTAR_CHANNEL_ID || kegiatanChannelId() || wdChannelId()) {
   intents.push(GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent);
-  console.log(`[daftar] auto-daftar aktif di channel ${DAFTAR_CHANNEL_ID}`);
+  if (DAFTAR_CHANNEL_ID) console.log(`[daftar] auto-daftar aktif di channel ${DAFTAR_CHANNEL_ID}`);
+  if (kegiatanChannelId()) console.log(`[kegiatan] channel kegiatan ${kegiatanChannelId()}`);
+  if (wdChannelId()) console.log(`[wd] auto-catat WD di channel ${wdChannelId()}`);
 }
 
 const client = new Client({ intents });
@@ -312,7 +327,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     const isWdCommand = interaction.commandName === "wd";
-    const sub = interaction.commandName === "anggota" || isWdCommand ? interaction.options.getSubcommand() : null;
+    const isKegiatanCommand = interaction.commandName === "kegiatan";
+    const sub =
+      interaction.commandName === "anggota" || isWdCommand || isKegiatanCommand
+        ? interaction.options.getSubcommand()
+        : null;
     // cari & hapus bersifat privat (ephemeral); command lain tampil di channel.
     // Semua command WD privat: kartunya sudah tampil publik di channel WD.
     const isPrivate = isWdCommand || sub === "cari" || sub === "hapus";
@@ -325,13 +344,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
     if (isWdCommand) {
       result = await handleWd(interaction, { client, resolveMemberId, sendLog });
+    } else if (isKegiatanCommand) {
+      result = await handleKegiatanCommand(interaction);
     } else {
       result = await handleAnggota(interaction);
     }
 
     if (result?.reply) {
       await interaction.editReply(result.reply);
-      if (!isWdCommand) refreshStruktur(client);
+      if (!isWdCommand && !isKegiatanCommand) refreshStruktur(client);
     }
   } catch (err) {
     const message = err instanceof UserError ? err.message : describeError(err);
@@ -412,14 +433,47 @@ client.once(Events.ClientReady, async (c) => {
   console.log(`[bot] total ${guilds.length} server`);
   refreshStruktur(c, { force: true });
   syncWdCards(c, { force: true });
+  if (WD_REMINDER_ENABLED) {
+    syncWdReminders(c);
+  } else {
+    console.log("[wd] pengingat terlambat nonaktif (WD_REMINDER_ENABLED != 1)");
+  }
   setInterval(() => refreshStruktur(c), REFRESH_MS);
   // Perubahan dari web (kembali/hilang/edit) ikut tampil di kartu Discord.
   setInterval(() => syncWdCards(c), 2 * 60_000);
+  // Pengingat senjata yang melewati tenggat 3 hari — hanya kalau diaktifkan.
+  if (WD_REMINDER_ENABLED) {
+    setInterval(() => syncWdReminders(c), 30 * 60_000);
+  }
 });
 
-// Auto-daftar dari channel: pesan berformat NAMA LENGKAP / JABATAN / STEAM HEX / ID DISCORD
-// langsung disimpan ke database, lalu pesannya diberi reaksi ✅ (atau ⚠️ kalau ada yang dilewati).
+// Auto-catat kegiatan: pesan berformat TANGGAL KEGIATAN / KEGIATAN / NEGOSIASI / NAMA ANGGOTA
+// di channel kegiatan langsung disimpan, lalu pesannya diberi reaksi ✅.
+// Pesan yang diedit mengubah data yang sama (tidak membuat baris baru).
 client.on(Events.MessageCreate, async (message) => {
+  if (wdChannelId() && message.channelId === wdChannelId()) {
+    try {
+      await handleWdMessage(message, {
+        isAllowedMember,
+        onChanged: () => syncWdCards(client),
+      });
+    } catch (err) {
+      console.error("[wd] error:", err.message ?? err);
+      await message.react("⚠️").catch(() => {});
+    }
+    return;
+  }
+
+  if (kegiatanChannelId() && message.channelId === kegiatanChannelId()) {
+    try {
+      await handleKegiatanMessage(message, { isAllowedMember });
+    } catch (err) {
+      console.error("[kegiatan] error:", err.message ?? err);
+      await message.react("⚠️").catch(() => {});
+    }
+    return;
+  }
+
   if (!DAFTAR_CHANNEL_ID) return;
   if (message.channelId !== DAFTAR_CHANNEL_ID) return;
   try {
@@ -429,6 +483,37 @@ client.on(Events.MessageCreate, async (message) => {
     });
   } catch (err) {
     console.error("[daftar] error:", err.message ?? err);
+    await message.react("⚠️").catch(() => {});
+  }
+});
+
+// Edit pesan format WD = coba proses ulang (hanya jika belum pernah ditandai ✅).
+client.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
+  if (!wdChannelId() || newMessage.channelId !== wdChannelId()) return;
+  if ((oldMessage.content ?? "") === (newMessage.content ?? "")) return;
+  const message = newMessage.partial ? await newMessage.fetch().catch(() => null) : newMessage;
+  if (!message) return;
+  try {
+    await handleWdMessage(message, {
+      isAllowedMember,
+      onChanged: () => syncWdCards(client),
+    });
+  } catch (err) {
+    console.error("[wd] error saat edit:", err.message ?? err);
+    await message.react("⚠️").catch(() => {});
+  }
+});
+
+// Edit pesan di channel kegiatan = edit kegiatan yang sudah tercatat.
+client.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
+  if (!kegiatanChannelId() || newMessage.channelId !== kegiatanChannelId()) return;
+  if ((oldMessage.content ?? "") === (newMessage.content ?? "")) return;
+  const message = newMessage.partial ? await newMessage.fetch().catch(() => null) : newMessage;
+  if (!message) return;
+  try {
+    await handleKegiatanMessage(message, { isAllowedMember });
+  } catch (err) {
+    console.error("[kegiatan] error saat edit:", err.message ?? err);
     await message.react("⚠️").catch(() => {});
   }
 });

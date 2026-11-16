@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { inputClass } from "@/components/ui";
+import { IconCheck } from "@/components/icons";
 
 export type MemberOption = { id: number; name: string; position: { name: string } };
 
@@ -27,9 +28,7 @@ export function MemberPicker({ members, value, onChange, error, autoFocus }: Pro
     const q = query.trim().toLowerCase();
     if (!q) return members;
     return members.filter(
-      (m) =>
-        m.name.toLowerCase().includes(q) ||
-        m.position.name.toLowerCase().includes(q),
+      (m) => m.name.toLowerCase().includes(q) || m.position.name.toLowerCase().includes(q),
     );
   }, [members, query]);
 
@@ -85,7 +84,7 @@ export function MemberPicker({ members, value, onChange, error, autoFocus }: Pro
 
   return (
     <div className="block">
-      <span className="mb-1 block text-sm font-medium text-zinc-300">Nama anggota</span>
+      <span className="mb-1 block text-[12px] font-medium text-ink-2">Nama anggota</span>
       <div className="relative">
         <input
           ref={inputRef}
@@ -93,8 +92,10 @@ export function MemberPicker({ members, value, onChange, error, autoFocus }: Pro
           aria-expanded={open}
           aria-controls="member-picker-list"
           aria-autocomplete="list"
-          aria-activedescendant={open && filtered[activeIndex] ? `member-option-${filtered[activeIndex].id}` : undefined}
-          className={`${inputClass} pr-9`}
+          aria-activedescendant={
+            open && filtered[activeIndex] ? `member-option-${filtered[activeIndex].id}` : undefined
+          }
+          className={`${inputClass} pr-8`}
           value={display}
           placeholder={selected ? selected.name : "Cari nama anggota…"}
           autoFocus={autoFocus}
@@ -120,7 +121,7 @@ export function MemberPicker({ members, value, onChange, error, autoFocus }: Pro
             type="button"
             aria-label="Kosongkan pilihan anggota"
             title="Kosongkan"
-            className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-xs text-zinc-500 transition hover:bg-white/10 hover:text-white"
+            className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-[5px] text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
               onChange("");
@@ -128,10 +129,21 @@ export function MemberPicker({ members, value, onChange, error, autoFocus }: Pro
               inputRef.current?.focus();
             }}
           >
-            ✕
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <path d="M6 6l12 12M18 6 6 18" />
+            </svg>
           </button>
         ) : (
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-zinc-500">
+          <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] text-ink-3">
             ▾
           </span>
         )}
@@ -141,10 +153,10 @@ export function MemberPicker({ members, value, onChange, error, autoFocus }: Pro
             ref={listRef}
             id="member-picker-list"
             role="listbox"
-            className="absolute z-30 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-white/10 bg-zinc-950 py-1 shadow-2xl shadow-black/60"
+            className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-field border border-line bg-surface py-1 shadow-[0_18px_40px_-24px_rgb(20_19_15_/0.45)]"
           >
             {filtered.length === 0 ? (
-              <li className="px-3 py-2 text-sm text-zinc-500">Tidak ada anggota yang cocok.</li>
+              <li className="px-3 py-2 text-[12.5px] text-ink-3">Tidak ada anggota yang cocok.</li>
             ) : (
               filtered.map((m, i) => {
                 const isSelected = m.id === value;
@@ -154,17 +166,19 @@ export function MemberPicker({ members, value, onChange, error, autoFocus }: Pro
                     id={`member-option-${m.id}`}
                     role="option"
                     aria-selected={isSelected}
-                    className={`relative flex cursor-pointer flex-col gap-0.5 px-3 py-1.5 ${
-                      i === activeIndex ? "bg-white/10 text-white" : "text-zinc-300"
+                    className={`relative flex cursor-pointer flex-col gap-0.5 px-2.5 py-1.5 ${
+                      i === activeIndex ? "bg-surface-2 text-ink" : "text-ink-2"
                     }`}
                     onMouseDown={(e) => e.preventDefault()}
                     onMouseEnter={() => setActive(i)}
                     onClick={() => choose(m)}
                   >
-                    <span className="truncate pr-5 text-sm">{m.name}</span>
-                    <span className="text-[11px] text-zinc-500">{m.position.name}</span>
+                    <span className="truncate pr-5 text-[12.5px]">{m.name}</span>
+                    <span className="text-[10.5px] text-ink-3">{m.position.name}</span>
                     {isSelected && (
-                      <span className="absolute right-3 top-2 text-xs text-emerald-400">✓</span>
+                      <span className="absolute right-2.5 top-2 text-ok">
+                        <IconCheck size={12} />
+                      </span>
                     )}
                   </li>
                 );
@@ -174,10 +188,10 @@ export function MemberPicker({ members, value, onChange, error, autoFocus }: Pro
         )}
       </div>
       {error ? (
-        <span className="mt-1 block text-xs text-rose-400">{error}</span>
+        <span className="mt-1 block text-[11.5px] text-bad">{error}</span>
       ) : (
-        <span className="mt-1 block text-xs text-zinc-500">
-          Ketik untuk mencari, ↑ ↓ untuk pilih, Enter untuk konfirmasi.
+        <span className="mt-1 block text-[11.5px] text-ink-3">
+          Ketik untuk mencari, ↑ ↓ pilih, Enter konfirmasi.
         </span>
       )}
     </div>

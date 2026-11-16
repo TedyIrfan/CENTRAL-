@@ -6,6 +6,7 @@ import { formatDateId } from "@/lib/dates";
 import { formatActivityText } from "@/lib/kegiatan-format";
 import { Modal } from "@/components/modal";
 import { Button } from "@/components/ui";
+import { IconCheck, IconCopy } from "@/components/icons";
 import { useToast } from "@/components/toast";
 
 export function ActivityDetailModal({
@@ -31,21 +32,20 @@ export function ActivityDetailModal({
 
   return (
     <Modal title={activity.code} onClose={onClose} size="lg">
-      <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-        <span>{formatDateId(activity.activityDate)}</span>
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-[11.5px] text-ink-3">
+        <span className="tnum">{formatDateId(activity.activityDate)}</span>
         <span>·</span>
-        <span>
-          {activity.participants.length} peserta
-        </span>
+        <span className="tnum">{activity.participants.length} peserta</span>
       </div>
 
-      <pre className="overflow-x-auto rounded-xl border border-white/10 bg-black p-4 font-mono text-xs leading-relaxed text-zinc-200">
+      <pre className="overflow-x-auto rounded-field border border-line bg-surface-2 p-3 font-mono text-[11.5px] leading-relaxed text-ink">
         {formatActivityText(activity)}
       </pre>
 
-      <div className="mt-5 flex justify-end gap-2">
+      <div className="mt-4 flex justify-end gap-2">
         <Button onClick={onClose}>Tutup</Button>
         <Button variant="primary" onClick={copy}>
+          {copied ? <IconCheck size={13} /> : <IconCopy size={13} />}
           {copied ? "Tersalin" : "Salin format"}
         </Button>
       </div>

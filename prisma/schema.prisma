@@ -26,17 +26,17 @@ model Position {
 }
 
 model Member {
-  id         Int          @id @default(autoincrement())
-  name       String
-  positionId Int          @map("position_id")
-  position   Position     @relation(fields: [positionId], references: [id], onDelete: Restrict)
-  hex        String?      @unique
-  discordId  String?      @unique @map("discord_id")
-  status     MemberStatus @default(TIDAK_DIKETAHUI)
-  wdRecords  WdRecord[]
+  id                     Int                   @id @default(autoincrement())
+  name                   String
+  positionId             Int                   @map("position_id")
+  position               Position              @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  hex                    String?               @unique
+  discordId              String?               @unique @map("discord_id")
+  status                 MemberStatus          @default(TIDAK_DIKETAHUI)
+  wdRecords              WdRecord[]
   activityParticipations ActivityParticipant[]
-  createdAt  DateTime     @default(now()) @map("created_at")
-  updatedAt  DateTime     @updatedAt @map("updated_at")
+  createdAt              DateTime              @default(now()) @map("created_at")
+  updatedAt              DateTime              @updatedAt @map("updated_at")
 
   @@index([status])
   @@index([positionId])
@@ -63,12 +63,14 @@ model WdRecord {
   durabilityStart  Int?      @map("durability_start")
   durabilityReturn Int?      @map("durability_return")
   takenAt          DateTime  @map("taken_at")
+  dueAt            DateTime? @map("due_at")
   returnedAt       DateTime? @map("returned_at")
   purpose          String
   returnNote       String?   @map("return_note")
   lostReason       String?   @map("lost_reason")
   status           WdStatus  @default(DIPINJAM)
   discordMessageId String?   @map("discord_message_id")
+  reminderAt       DateTime? @map("reminder_at")
   createdBy        String?   @map("created_by")
   returnedBy       String?   @map("returned_by")
   createdAt        DateTime  @default(now()) @map("created_at")
@@ -78,21 +80,23 @@ model WdRecord {
   @@index([borrowerName])
   @@index([serialNumber])
   @@index([takenAt])
+  @@index([status, dueAt])
   @@map("wd_records")
 }
 
-
 /// Kegiatan/acara yang diikuti anggota.
 model Activity {
-  id           Int                   @id @default(autoincrement())
-  code         String                @unique
-  title        String
-  negotiation  String?
-  activityDate DateTime              @map("activity_date")
-  createdBy    String?               @map("created_by")
-  participants ActivityParticipant[]
-  createdAt    DateTime              @default(now()) @map("created_at")
-  updatedAt    DateTime              @updatedAt @map("updated_at")
+  id               Int                   @id @default(autoincrement())
+  code             String                @unique
+  title            String
+  negotiation      String?
+  activityDate     DateTime              @map("activity_date")
+  createdBy        String?               @map("created_by")
+  /// ID pesan Discord asal kegiatan (dipakai bot agar edit pesan = edit data).
+  discordMessageId String?               @unique @map("discord_message_id")
+  participants     ActivityParticipant[]
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
 
   @@index([activityDate])
   @@map("activities")
@@ -114,3 +118,28 @@ model ActivityParticipant {
   @@index([memberId])
   @@map("activity_participants")
 }
+
+enum VaultStatus {
+  SIAP
+  DIPINJAM
+  HILANG
+  RUSAK
+}
+
+/// Stok barang di Berangkas. Satu baris = satu unit (senjata punya SN).
+model VaultItem {
+  id           Int         @id @default(autoincrement())
+  name         String
+  serialNumber String?     @unique @map("serial_number")
+  isWeapon     Boolean     @default(true) @map("is_weapon")
+  durability   Int?
+  status       VaultStatus @default(SIAP)
+  note         String?
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([name])
+  @@map("vault_items")
+}
+

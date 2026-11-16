@@ -6,7 +6,8 @@ import { WD_STATUS_OPTIONS } from "@/lib/types";
 import { formatDateId } from "@/lib/dates";
 import { formatWdText } from "@/lib/wd-format";
 import { Modal } from "@/components/modal";
-import { Button } from "@/components/ui";
+import { Badge, Button } from "@/components/ui";
+import { IconCopy, IconCheck } from "@/components/icons";
 import { useToast } from "@/components/toast";
 
 export function WdDetailModal({ record, onClose }: { record: WdRecord; onClose: () => void }) {
@@ -25,35 +26,51 @@ export function WdDetailModal({ record, onClose }: { record: WdRecord; onClose: 
     }
   }
 
+  const late = record.isOverdue || (record.status === "DIKEMBALIKAN" && record.daysLate > 0);
+
   return (
-    <Modal title={record.code} onClose={onClose}>
-      <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-        <span className={`inline-flex rounded-full px-2 py-0.5 font-medium ring-1 ring-inset ${status?.className}`}>
-          {status?.label}
-        </span>
+    <Modal title={record.code} onClose={onClose} size="lg">
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-[11.5px] text-ink-3">
+        <Badge className={status?.className}>{status?.label}</Badge>
         <span>Diambil {formatDateId(record.takenAt)}</span>
         {record.returnedAt && <span>· Kembali {formatDateId(record.returnedAt)}</span>}
         {record.isWeapon && <span>· Senjata</span>}
       </div>
 
-      <pre className="overflow-x-auto rounded-xl border border-white/10 bg-black p-4 font-mono text-xs leading-relaxed text-zinc-200">
+      <pre className="overflow-x-auto rounded-field border border-line bg-surface-2 p-3 font-mono text-[11.5px] leading-relaxed text-ink">
         {formatWdText(record)}
       </pre>
 
-      {record.returnNote && (
-        <p className="mt-3 text-xs text-zinc-400">
-          <span className="text-zinc-500">Catatan kondisi:</span> {record.returnNote}
-        </p>
-      )}
-      {record.lostReason && (
-        <p className="mt-3 text-xs text-rose-300">
-          <span className="text-rose-400/70">Alasan hilang:</span> {record.lostReason}
+      {record.isWeapon && record.dueAt && (
+        <p className={`mt-2.5 text-[11.5px] ${late ? "text-bad" : "text-ink-3"}`}>
+          <span className="text-ink-3">Tenggat kembali:</span> {formatDateId(record.dueAt)}
+          {record.isOverdue
+            ? ` · terlambat ${record.daysLate} hari`
+            : record.status === "DIPINJAM"
+              ? record.daysLeft === 0
+                ? " · hari ini"
+                : ` · sisa ${record.daysLeft} hari`
+              : record.status === "DIKEMBALIKAN" && record.daysLate > 0
+                ? ` · dikembalikan terlambat ${record.daysLate} hari`
+                : ""}
         </p>
       )}
 
-      <div className="mt-5 flex justify-end gap-2">
+      {record.returnNote && (
+        <p className="mt-2 text-[11.5px] text-ink-2">
+          <span className="text-ink-3">Catatan kondisi:</span> {record.returnNote}
+        </p>
+      )}
+      {record.lostReason && (
+        <p className="mt-2 text-[11.5px] text-bad">
+          <span className="opacity-70">Alasan hilang:</span> {record.lostReason}
+        </p>
+      )}
+
+      <div className="mt-4 flex justify-end gap-2">
         <Button onClick={onClose}>Tutup</Button>
         <Button variant="primary" onClick={copy}>
+          {copied ? <IconCheck size={13} /> : <IconCopy size={13} />}
           {copied ? "Tersalin" : "Salin format"}
         </Button>
       </div>

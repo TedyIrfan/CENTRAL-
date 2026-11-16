@@ -133,6 +133,29 @@ async function parseParticipants(v: unknown, errors: Fields): Promise<Participan
   return cleaned;
 }
 
+function parseDiscordMessageId(v: unknown, errors: Fields): string | undefined {
+  if (v === undefined || v === null || v === "") return;
+  if (typeof v !== "string" || !/^\d{15,21}$/.test(v)) {
+    errors.discordMessageId = "discordMessageId tidak valid";
+    return;
+  }
+  return v;
+}
+
+function parseCreatedBy(v: unknown, errors: Fields): string | undefined {
+  if (v === undefined || v === null || v === "") return;
+  if (typeof v !== "string") {
+    errors.createdBy = "createdBy harus berupa teks";
+    return;
+  }
+  const text = v.trim();
+  if (text.length > 100) {
+    errors.createdBy = "createdBy maksimal 100 karakter";
+    return;
+  }
+  return text || undefined;
+}
+
 // ---------- helper ----------
 
 async function nextCode(db: Prisma.TransactionClient, date: Date) {
@@ -155,6 +178,7 @@ function serialize(a: ActivityWithParticipants) {
     title: a.title,
     negotiation: a.negotiation,
     activityDate: a.activityDate.toISOString(),
+    discordMessageId: a.discordMessageId,
     participants: a.participants
       .slice()
       .sort((x, y) => x.sortOrder - y.sortOrder || x.id - y.id)
@@ -171,6 +195,7 @@ export type ActivityListParams = {
   from?: Date;
   to?: Date;
   memberId?: number;
+  discordMessageId?: string;
   page: number;
   pageSize: number;
 };
@@ -206,6 +231,12 @@ export function parseActivityListParams(sp: URLSearchParams): ActivityListParams
     else result.memberId = Number(memberId);
   }
 
+  const discordMessageId = sp.get("discordMessageId");
+  if (discordMessageId) {
+    if (!/^\d{15,21}$/.test(discordMessageId)) errors.discordMessageId = "discordMessageId tidak valid";
+    else result.discordMessageId = discordMessageId;
+  }
+
   const page = sp.get("page");
   if (page) {
     if (!/^\d+$/.test(page) || Number(page) < 1 || Number(page) > 1_000_000) errors.page = "page tidak valid";
@@ -223,7 +254,9 @@ export function parseActivityListParams(sp: URLSearchParams): ActivityListParams
   return result;
 }
 
-function buildWhere(p: Pick<ActivityListParams, "search" | "from" | "to" | "memberId">) {
+function buildWhere(
+  p: Pick<ActivityListParams, "search" | "from" | "to" | "memberId" | "discordMessageId">,
+) {
   const where: Prisma.ActivityWhereInput = {};
   if (p.from || p.to) {
     where.activityDate = {
@@ -232,6 +265,7 @@ function buildWhere(p: Pick<ActivityListParams, "search" | "from" | "to" | "memb
     };
   }
   if (p.memberId) where.participants = { some: { memberId: p.memberId } };
+  if (p.discordMessageId) where.discordMessageId = p.discordMessageId;
   if (p.search) {
     where.OR = [
       { code: { contains: p.search, mode: "insensitive" } },
@@ -297,6 +331,8 @@ export async function createActivity(input: Record<string, unknown>) {
   const negotiation = parseNegotiation(input.negotiation, errors);
   const activityDate = parseActivityDate(input.activityDate, errors) ?? parseDateInput(todayWib())!;
   const participants = await parseParticipants(input.participants, errors);
+  const discordMessageId = parseDiscordMessageId(input.discordMessageId, errors);
+  const createdBy = parseCreatedBy(input.createdBy, errors);
   if (Object.keys(errors).length) fail(errors);
 
   return prisma.$transaction(async (tx) => {
@@ -306,7 +342,8 @@ export async function createActivity(input: Record<string, unknown>) {
         title: title!,
         negotiation: negotiation ?? null,
         activityDate,
-        createdBy: "web",
+        createdBy: createdBy ?? "web",
+        ...(discordMessageId ? { discordMessageId } : {}),
         participants: {
           create: participants.map((p, index) => ({
             memberId: p.memberId,

@@ -1,10 +1,16 @@
 # PROGRESS — Central T
 
-Catatan progres per modul. Terakhir diperbarui: **14 Nov 2026**.
+Catatan progres per modul. Terakhir diperbarui: **15 Nov 2026**.
 
 Status modul **Struktur & Anggota** menurut pemilik proyek: **99% selesai** (belum ditutup).
-Modul **WD (Withdraw)** selesai di web dan bot-nya sudah terpasang, tetapi **kartu Discord belum
-aktif** karena channel WD masih privat (detail di §3–§4).
+Modul **WD (Withdraw)** selesai di web & bot; akses channel sudah diberikan dan **auto-catat
+dari chat sudah diuji end-to-end** (`WD-20261112-001`). Yang belum: uji klik ✅ pada kartu
+(detail di §3–§5).
+Modul **Kegiatan** sudah jalan di web & bot; **akses channel kegiatan juga sudah diberikan
+(14 Nov 2026)**, tinggal uji kirim format asli (detail di §4–§5).
+
+> **15 Nov 2026 — redesain UI ("kertas & tinta") selesai di semua halaman web.**
+> Rincian ada di §10.
 
 ---
 
@@ -13,9 +19,9 @@ aktif** karena channel WD masih privat (detail di §3–§4).
 | Modul | Web | Bot Discord | Status |
 |---|---|---|---|
 | **Struktur & Anggota** | ✅ selesai | ✅ selesai | **99%** — tinggal penyelesaian kecil |
-| **WD (Withdraw)** | ✅ selesai | ⚠️ terpasang, kartu belum aktif | menunggu izin channel WD |
-| Kegiatan | ✅ selesai | ❌ belum | bot belum mulai |
-| Berangkas | ⚠️ placeholder ("segera hadir") | – | belum dibangun |
+| **WD (Withdraw)** | ✅ selesai | ✅ terpasang, auto-catat chat sudah diuji | tinggal uji klik ✅ kartu |
+| Kegiatan | ✅ selesai | ✅ terpasang, channel sudah bisa diakses | tinggal uji kirim format |
+| Berangkas | ✅ sederhana (DB + API + web) | – | 18 unit DA terisi |
 
 ---
 
@@ -42,7 +48,7 @@ aktif** karena channel WD masih privat (detail di §3–§4).
 - Command didaftarkan otomatis di **semua server** yang diikuti bot
 
 **Integrasi**
-- Bot tidak menyentuh database langsung; semua lewat API web (`http://app:3000`) → Prisma → PostgreSQL
+- Bot tidak menyentuh database langsung; semua lewat API web (`http://app:3001`) → Prisma → PostgreSQL
 - Satu sumber data: perubahan dari bot langsung tampil di web (setelah refresh) dan sebaliknya
 
 **Data per 14 Nov 2026**
@@ -54,13 +60,28 @@ aktif** karena channel WD masih privat (detail di §3–§4).
 ## 3. WD (Withdraw) — web & bot
 
 ### Web `/wd` (selesai)
-- Ringkasan (dipinjam / kembali bulan ini / hilang), filter status + rentang tanggal + pencarian
-  (kode, nama, barang, SN), pagination 20/halaman.
+- Ringkasan (dipinjam / **terlambat** / kembali bulan ini / hilang), filter status + rentang tanggal
+  + pencarian (kode, nama, barang, SN), pagination 20/halaman.
 - Form Ambil/Edit (anggota, barang, toggle senjata, SN, durab, qty, tanggal, keperluan).
 - Modal Kembali (durab default = durab awal — **boleh sama**) dan modal Hilang (alasan wajib).
 - Detail berisi format baku + tombol **Salin format**.
 
-### Bot Discord (kode selesai, belum aktif)
+### Tenggat senjata 3 hari (baru, 14 Nov 2026)
+- Setiap **senjata** yang diambil otomatis punya tenggat `takenAt + 3 hari` (`dueAt`).
+  Non-senjata tidak punya tenggat.
+- Status **terlambat** dihitung otomatis (`isOverdue`, `daysLate`, `daysLeft`) tanpa mengubah
+  status database (tetap `DIPINJAM`).
+- Web: kartu **Terlambat** (bisa diklik untuk filter), kolom **Tenggat** di tabel, preview tenggat
+  di form, peringatan di modal kembali, dan info tenggat di detail.
+- Bot: field **Tenggat kembali** di kartu, tanda ⚠️ di `/wd daftar` & `/wd cari`, balasan
+  pengembalian menyebut keterlambatan.
+- **Pengingat harian:** bot cek tiap 30 menit (`GET /api/wd?overdue=1`), kirim pesan
+  ⚠️ **PENGEMBALIAN TERLAMBAT** ke channel WD (mention peminjam bila punya ID Discord),
+  maksimal sekali per ~20 jam per transaksi (`reminder_at`).
+- API: filter `overdue`, `POST /api/wd/[id]/reminder`, statistik `terlambat`.
+- Pengembalian terlambat **tetap diterima** dan tercatat; tidak diblokir.
+
+### Bot Discord (terpasang, channel sudah bisa diakses)
 - Command: `/wd ambil`, `/wd kembali`, `/wd hilang`, `/wd cari`, `/wd daftar`
   (autocomplete anggota, saran nama barang, kode transaksi `DIPINJAM`).
 - **Skema kartu = 2 pesan per transaksi:**
@@ -74,29 +95,87 @@ aktif** karena channel WD masih privat (detail di §3–§4).
   otomatis hari ini (WIB). Tidak perlu mengetik format — bot mengisi lengkap dari database.
 - Sinkronisasi web → Discord tiap 2 menit (`GET /api/wd?updatedAfter=`): kalau transaksi sudah
   kembali di web tetapi kartu pengambilan masih "Dipinjam", bot mengirim kartu pengembalian baru.
-- API pendukung baru: `POST /api/wd/[id]/discord-message`, filter `updatedAfter` di `GET /api/wd`.
+- API pendukung: `POST /api/wd/[id]/discord-message`, filter `updatedAfter` di `GET /api/wd`.
+
+### Auto-catat WD dari chat (14 Nov 2026, sudah diuji)
+- Bot membaca pesan format baku di channel WD (pola sama seperti auto-catat kegiatan):
+  - **tanpa** `TGL PENGEMBALIAN` → dicatat sebagai **pengambilan** baru;
+  - **dengan** `TGL PENGEMBALIAN` + `DURAB DIKEMBALIKAN` → dicari transaksi `DIPINJAM` yang cocok
+    (utamakan **SN**, lalu nama + jenis barang) lalu ditandai **kembali**.
+- Balasan: ✅ + kode WD & cara mengembalikan, atau ⚠️ + alasan + contoh format (hilang 25 detik);
+  pengirim di luar allowlist → ⛔. Pesan yang sudah ✅ tidak diproses ulang walau diedit.
+- Nama pendek dicocokkan prefix ke nama lengkap: `CT - IPAN` → **IPAN NAS**.
+- Baris header `FORMAT PENGAMBILAN…` opsional (asal ≥4 label dikenali); `-`/`—`/`66%` diterima.
+- Berkas: `bot/src/wd-format.js` (parser) + `bot/src/wd-message.js` (handler), dipasang di
+  `MessageCreate` & `MessageUpdate` (`bot/src/index.js`).
+- **Uji end-to-end** (14 Nov, dari Discord): `WD-20261112-001` — IPAN NAS · DA · SN
+  `FWJ17932118690UM`, ambil 12/11 durab 66%, kembali 13/11 durab 44% → ✅ dua-duanya,
+  status `DIKEMBALIKAN`, tampil di web.
 
 ### Uji & data
-- Smoke test API: `GET /api/wd?updatedAfter=…` OK, `POST /api/wd/[id]/discord-message` 404 untuk
-  ID tidak ada, web `/wd` HTTP 200.
-- `tsc --noEmit` bersih; `node --check` untuk file bot OK.
-- Data WD saat ini: 2 transaksi (dua-duanya sudah kembali), 0 dipinjam.
-- **Belum diuji end-to-end dari Discord** (klik ✅ → kartu kembali) karena blocker di bawah.
+- API tenggat (14 Nov): buat senjata `takenAt=10/11` → `dueAt=13/11`, `isOverdue=true`,
+  `daysLate=1`; filter `overdue=1` menemukan; `stats.terlambat=1`; `POST reminder` mengisi
+  `reminder_at`; kembali `14/11` → `daysLate=1` dan tidak lagi terhitung terlambat; non-senjata
+  `dueAt=null`; edit `takenAt` menghitung ulang tenggat. Semua lolos, data uji dihapus.
+- Bot: simulasi `syncWdReminders` dengan channel tiruan → 1 pesan, run kedua tidak mengirim lagi,
+  `reminder_at` terisi; embed kartu memuat field **Tenggat kembali**.
+- `tsc --noEmit` bersih; `node --check` file bot OK; web `/wd` HTTP 200.
+- Data WD (14 Nov 2026): **18 transaksi** hasil import stok DA — 16 `DIPINJAM`, 1 `DIKEMBALIKAN` (EXXEL), 1 `HILANG` (TYRONE SMITH). Tenggat mengikuti jadwal asli (03/06/08/09/12/15 Nov).
+  Termasuk `WD-20261112-001` hasil uji auto-catat chat.
 
-### ⚠️ Blocker: bot belum punya akses channel WD
-- Channel `🔫┃𝚆𝙷𝙸𝚃𝙳𝚁𝙰𝚆-𝙳𝙰` = **`1567507915374460938`** (sudah diisi di `.env` sebagai
-  `WD_CHANNEL_ID`), tetapi channel-nya **privat**: `@everyone` di-deny *View Channel* dan hanya
-  10 user yang diizinkan (tanpa role).
-- Bot (`CT - BOT`) belum ada di permission overwrite channel → `403 Missing Access`.
-  Akibatnya `/wd ambil` tetap tercatat di database & tampil di web, tetapi kartu gagal dikirim.
-- **Tindakan:** tambahkan `CT - BOT` di *Edit Channel → Permissions* dengan izin
-  **View Channel, Send Messages, Embed Links, Read Message History**.
+### ✅ Akses channel WD (diverifikasi 14 Nov 2026)
+- Channel `🔫┃𝚆𝙷𝙸𝚃𝙳𝚁𝙰𝚆-𝙳𝙰` = `1567507915374460938`.
+- Dicek lewat API Discord: bot bisa **View Channel, Send Messages, Add Reactions,
+  Read Message History, Embed Links** (bukan Administrator).
+- Kartu WD sekarang bisa dikirim; uji klik ✅ end-to-end dari Discord belum dijalankan
+  (butuh interaksi manual).
 
 ---
 
-## 4. Sisa pekerjaan
+## 4. Kegiatan — web & bot
 
-### 4.1 Struktur & Anggota (sisa 1%)
+### Web `/kegiatan` (selesai)
+Ringkasan bulan ini, pencarian + filter tanggal, tabel 20/halaman, form peserta (anggota atau
+nama manual), detail + **Salin format**. Rincian ada di `PRD-KEGIATAN.md`.
+
+### Bot Discord (terpasang, channel siap)
+- Channel: `👥┃𝙽𝙰𝙼𝙰-𝙰𝙽𝙶𝙶𝙾𝚃𝙰-𝚈𝙰𝙽𝙶-𝙸𝙺𝚄𝚃-𝙺𝙴𝙶𝙸𝙰𝚃𝙰𝙽` = `1568673636355670218`
+  (`KEGIATAN_CHANNEL_ID`).
+- Kirim format baku (`TANGGAL KEGIATAN` / `KEGIATAN` / `NEGOSIASI` / `NAMA ANGGOTA`) → bot
+  mencatat ke database, membuat kode `KGT-YYYYMMDD-NNN`, lalu pesannya diberi reaksi ✅.
+- Format salah → reaksi ⚠️ + balasan alasan + contoh format (hilang sendiri 25 detik);
+  pengirim di luar allowlist → ⛔; chat biasa diabaikan.
+- **Edit pesan = edit data yang sama** lewat `activities.discord_message_id` (unik), tidak dobel.
+- Peserta dicocokkan ke anggota (nama persis, case-insensitive); yang tidak ada disimpan sebagai
+  nama manual (PRD K1). Nama ganda di database → disimpan manual + dicatat di log bot.
+- `/kegiatan rekap` — kegiatan bulan ini, peserta bulan ini, total, + 10 kegiatan terakhir.
+- Uji: 8 kasus parser (`bot/test-kegiatan-parser.mjs`) + uji integrasi API
+  create/edit/delete memakai pesan tiruan di container — semua lolos; `tsc --noEmit` bersih.
+- ✅ **Akses channel diberikan (14 Nov 2026):** `CT - BOT` bisa View Channel, Read Message
+  History, Add Reactions, Send Messages, Embed Links. Tinggal uji kirim format asli di channel.
+
+---
+
+## 5. Berangkas (sederhana, 14 Nov 2026)
+
+- **Database:** tabel `vault_items` + enum `VaultStatus` (`SIAP`, `DIPINJAM`, `HILANG`, `RUSAK`).
+  Satu baris = satu unit; SN unik untuk senjata; durab opsional (data lama boleh kosong).
+  Migrasi: `prisma/migrations/20261114161000_add_vault_items`.
+- **API:** `GET/POST /api/berangkas`, `GET/PATCH/DELETE /api/berangkas/[id]`,
+  `GET /api/berangkas/stats`, `GET /api/berangkas/names`.
+- **Web `/berangkas`:** kartu statistik (total/siap/dipinjam/hilang/rusak), pencarian + filter
+  status, tabel (barang, SN, durab, status, catatan), form tambah/edit, hapus dengan konfirmasi,
+  pagination 20/halaman.
+- **Data 14 Nov 2026:** 18 unit **DA** (senjata) — 16 `DIPINJAM`, 1 `SIAP` (READY), 1 `HILANG` (SNX17932118670SB, denda 1x lipat). Durab terisi di 2 unit (66%, 80%), sisanya kosong. Rincian: `PRD-BERANGKAS.md`.
+- **Sinkronisasi WD → Berangkas:** WD ambil (SN cocok) → unit `DIPINJAM`; kembali → `SIAP`;
+  hilang → `HILANG`; hapus WD yang masih dipinjam → `SIAP`. Stok tersedia ikut berubah otomatis.
+- **Belum:** import massal daftar SN, riwayat perubahan, qty untuk barang non-senjata.
+
+---
+
+## 6. Sisa pekerjaan
+
+### 6.1 Struktur & Anggota (sisa 1%)
 Prioritas dari atas:
 
 1. **Log audit channel** — `LOG_CHANNEL_ID` masih kosong, jadi setiap perubahan tidak tercatat siapa pelakunya. Ini yang paling terasa risikonya karena bot & web tanpa login.
@@ -112,9 +191,9 @@ Prioritas dari atas:
 11. **Bot masih memegang `DISCORD_TOKEN` dari `.env` yang sama dengan web** — sebaiknya dipisah.
 12. **Pagination `/anggota`** — belum ada, belum terasa di 65 anggota.
 
-### 4.2 WD (yang belum)
-1. **Aktifkan kartu Discord** — beri `CT - BOT` akses ke channel WD, lalu uji end-to-end:
-   `/wd ambil` → klik ✅ → kartu pengembalian muncul → cek web.
+### 6.2 WD (yang belum)
+1. **Uji klik ✅ end-to-end** — `/wd ambil` → kartu muncul di channel → klik ✅ → kartu
+   pengembalian muncul → cek web. Akses channel sudah ada, tinggal interaksi manual.
 2. **Koreksi transaksi** — setelah `DIKEMBALIKAN`/`HILANG` data terkunci. Rencana:
    `/wd batal-kembali` (balik ke `DIPINJAM`, hapus kartu pengembalian, pulihkan tombol) +
    tombol "Batalkan pengembalian" di web. **Belum dibuat** (diputuskan menyusul).
@@ -122,28 +201,39 @@ Prioritas dari atas:
    transaksi dari web tidak muncul di channel.
 4. **`/wd daftar`** hanya 20 baris, belum ada pagination.
 5. **Log audit WD** — `LOG_CHANNEL_ID` kosong; pelaku perubahan tidak tercatat.
-6. **Master barang/Berangkas** — nama barang masih teks bebas + saran dari transaksi lama.
-7. **Tes otomatis** — belum ada tes untuk alur kartu/tombol; baru smoke test API.
+6. **Master barang** — nama barang masih teks bebas; relasi katalog belum ada (integrasi status Berangkas ↔ WD sudah jalan).
+7. **Tes otomatis** — sudah ada uji API tenggat + simulasi pengingat; alur klik tombol belum.
+
+### 6.3 Kegiatan (yang belum)
+1. **Uji kirim format asli** di channel kegiatan (akses bot sudah ada).
+2. **`/kegiatan catat` dan `/kegiatan impor`** (backfill pesan lama) — belum dibuat.
+3. **Sinkron web → Discord** — edit/hapus dari web belum mengubah pesan Discord (baru berlaku
+   pada alur edit pesan).
+4. **Log audit kegiatan** — `LOG_CHANNEL_ID` kosong; pelaku perubahan tidak tercatat.
+5. **Rekap lanjutan** — per anggota, grafik bulanan, export CSV.
 
 ---
 
-## 5. Konfigurasi aktif
+## 7. Konfigurasi aktif
 
 | Env | Nilai | Keterangan |
 |---|---|---|
 | `DISCORD_GUILD_ID` | `1541970119129833552` | Server Central T |
 | `STRUKTUR_CHANNEL_ID` | `1570765829581054073` | Channel `🌐┃𝚂𝚃𝚁𝚄𝙺𝚃𝚄𝚁-𝙲𝚃` |
 | `DAFTAR_CHANNEL_ID` | `1570765829581054073` | Auto-daftar dari chat (channel yang sama) |
-| `WD_CHANNEL_ID` | `1567507915374460938` | Channel `🔫┃𝚆𝙷𝙸𝚃𝙳𝚁𝙰𝚆-𝙳𝙰` — **privat, bot belum punya akses** |
+| `WD_CHANNEL_ID` | `1567507915374460938` | Channel `🔫┃𝚆𝙷𝙸𝚃𝙳𝚁𝙰𝚆-𝙳𝙰` — akses bot sudah diberikan |
+| `KEGIATAN_CHANNEL_ID` | `1568673636355670218` | Channel `👥┃𝙽𝙰𝙼𝙰-𝙰𝙽𝙶𝙶𝙾𝚃𝙰-𝚈𝙰𝙽𝙶-𝙸𝙺𝚄𝚃-𝙺𝙴𝙶𝙸𝙰𝚃𝙰𝙽` — akses bot sudah diberikan |
 | `ALLOWED_ROLE_IDS` | `1541988598717354105` | Role BIG HOMIES |
 | `ALLOWED_USER_IDS` | `994798708812161055`, `1428649915189428244` | Pemilik + 1 teman |
 | `LOG_CHANNEL_ID` | kosong | Belum diaktifkan |
+| `WD_REMINDER_ENABLED` | `0` | Pengingat "PENGEMBALIAN TERLAMBAT" di channel WD — **mati** sejak 16 Nov 2026 |
 
-Catatan: `Message Content Intent` **wajib aktif** di Developer Portal untuk fitur auto-daftar.
+Catatan: `Message Content Intent` **wajib aktif** di Developer Portal untuk auto-daftar dan
+auto-catat kegiatan.
 
 ---
 
-## 6. Cara deploy & cek
+## 8. Cara deploy & cek
 
 ```powershell
 cd C:\Users\irfan\Documents\CT\central-t
@@ -156,10 +246,10 @@ Cek cepat setelah deploy:
 
 ```powershell
 # web hidup?
-Invoke-WebRequest http://localhost:3000/wd -UseBasicParsing | Select-Object StatusCode
+Invoke-WebRequest http://localhost:3001/wd -UseBasicParsing | Select-Object StatusCode
 
 # API WD + filter sinkronisasi
-Invoke-RestMethod "http://localhost:3000/api/wd?updatedAfter=2026-11-14T00:00:00Z&pageSize=5" | ConvertTo-Json -Depth 3
+Invoke-RestMethod "http://localhost:3001/api/wd?updatedAfter=2026-11-14T00:00:00Z&pageSize=5" | ConvertTo-Json -Depth 3
 ```
 
 Melihat menu bot yang aktif (dari sisi Discord, bukan asumsi):
@@ -171,9 +261,224 @@ curl.exe -s -H "Authorization: Bot $tok" "https://discord.com/api/v10/applicatio
 
 ---
 
-## 7. Berikutnya (setelah WD aktif)
+## 9. Berikutnya (WD & kegiatan sudah aktif)
 
-1. **WD**: aktifkan akses channel → uji end-to-end → koreksi (`batal-kembali`) → master barang.
-2. **Kegiatan di Discord** — `/kegiatan catat`, `/kegiatan rekap`; perlu migrasi
-   `discord_message_id` untuk `activities`.
-3. **Berangkas** — halaman masih placeholder.
+1. **Kegiatan**: uji kirim format asli di channel → baru lanjut `/kegiatan catat` + impor pesan lama.
+2. **WD**: uji klik ✅ end-to-end → koreksi (`batal-kembali`) → master barang.
+3. **Berangkas**: isi data stok (DA) -> integrasi WD (status unit otomatis) -> import massal SN.
+
+---
+
+## 10. Redesain UI — "kertas & tinta" (15 Nov 2026)
+
+**Kenapa.** Logo Central T adalah gambar tinta hitam (engraving) dengan latar transparan. Di atas
+latar hitam, hanya highlight putihnya yang terlihat sehingga logo tampak bayangan pucat; aksen
+putih-hitam juga membuat teks 11–13px low-contrast dan aksi disembunyikan di balik hover.
+Arah baru diturunkan dari asetnya sendiri: kertas, tinta, garis rambut 1px.
+
+**Aturan visual (jangan dilanggar saat menambah halaman):**
+
+| Hal | Aturan |
+|---|---|
+| Latar | `bg-paper` (#f7f6f2) untuk halaman, `bg-surface` (#fff) untuk panel |
+| Teks | `text-ink` (utama), `text-ink-2` (sekunder), `text-ink-3` (meta) |
+| Garis | `border-line` / `border-line-2`, radius `rounded-card` (10px) & `rounded-field` (8px) |
+| Warna | Hanya untuk status: `ok` / `warn` / `bad` + `*-soft`. Tidak ada gradien/bayangan dekoratif |
+| Ikon | SVG dari `src/components/icons.tsx` (16px, stroke 1.8). **Emoji tidak dipakai sebagai ikon** |
+| Angka | class `tnum` (tabular) untuk qty, durab, tanggal, statistik |
+| Mono | Hanya Hex/SN/kode transaksi |
+
+**File yang berubah:** `app/globals.css` (token + `@theme inline`), `components/icons.tsx` (baru),
+`components/{ui,modal,toast,nav}.tsx`, seluruh `app/**/page.tsx`, `components/{member,kegiatan,wd,vault}-*`,
+`components/member-picker.tsx`, `components/participant-picker.tsx`, `lib/types.ts` (class badge).
+
+**Perubahan per halaman**
+
+- **`/` Struktur** — papan chip padat: satu baris per jabatan, chip 160×30 px, status berupa titik
+  warna. **65 anggota muat tanpa scroll** pada 1366×768 (diukur: `scrollHeight` = `innerHeight`).
+  Klik chip → panel kanan berisi jabatan, Steam Hex (salin), ID Discord, dan tombol Naik/Turun/Edit/Hapus.
+  Tombol **Hex** menampilkan hex di dalam chip (chip jadi 40px, boleh scroll).
+- **`/anggota`** — satu tabel dengan baris pemisah per jabatan (sebelumnya header tabel diulang 6×).
+- **`/wd`** — 4 angka ringkas (kartu "Terlambat" tetap bisa diklik jadi filter), tabel 10 kolom,
+  baris terlambat diberi latar `warn-soft`.
+- **`/kegiatan`, `/berangkas`, `/positions`** — pola yang sama; `/positions` kini punya tautan di navbar.
+- **Aksesibilitas**: tombol ikon selalu punya `aria-label`, status punya teks `sr-only`, fokus
+  keyboard terlihat (`:focus-visible` 2px), animasi dimatikan pada `prefers-reduced-motion`.
+
+**Verifikasi (15 Nov 2026):** `tsc --noEmit` bersih; 6 rute mengembalikan 200; screenshot headless
+Edge 1440×900 & 1366×768 untuk keenam halaman.
+
+**Deploy:** tampilan ini ada di source, jadi container harus dibangun ulang —
+`docker compose --profile app up -d --build app`.
+
+---
+
+## 11. Pindah ke port 3001 (16 Nov 2026)
+
+Port **3000 = versi lama**, port **3001 = versi baru**. Sekarang web, bot, dan skrip uji
+semuanya mengarah ke **3001**; port 3000 tidak dipakai lagi.
+
+| Berkas | Perubahan |
+|---|---|
+| `src` / `docker-compose.yml` | `app` dipetakan `3001:3001` (sebelumnya `3000:3000`) |
+| `Dockerfile` | `ENV PORT=3001`, `EXPOSE 3001` |
+| `package.json` | `dev`/`start` memakai `-p 3001` |
+| `docker-compose.yml` | bot: `API_URL: http://app:3001` |
+| `bot/src/api.js` | default `http://localhost:3001` (dipakai saat bot dijalankan di host) |
+| `scripts/*.mjs` | default `BASE_URL`/`base` → `localhost:3001` |
+
+**Database tidak ikut pindah:** `/` (struktur) dan `/anggota` tidak menyimpan host/port sendiri —
+keduanya memanggil `/api/...` di origin yang sama → Prisma → `DATABASE_URL`. PostgreSQL tetap
+di `localhost:5432` (volume Docker `central-t_central_t_pgdata`), karena 3001 adalah port HTTP
+aplikasi, bukan port database.
+
+**Verifikasi (16 Nov 2026):** `npx tsc --noEmit` bersih; `node --check` semua file bot OK;
+container `central-t-app` listen `3001:3001`, `no pending migrations`; `GET /`, `/anggota`,
+`/positions`, `/api/members`, `/api/positions` → HTTP 200 dengan data asli (65 anggota, 6 jabatan);
+port 3000 sudah tidak ada yang jalan; `docker exec central-t-bot printenv API_URL` =
+`http://app:3001`; log bot `login sebagai CT - BOT#2687`, 5 command terdaftar di 2 server,
+struktur diperbarui, pengingat WD terkirim.
+
+---
+
+## 12. Sinkronisasi anggota dari Google Sheet (16 Nov 2026)
+
+`scripts/import-sheet.mjs` ditulis ulang. Sheet sumber:
+`https://docs.google.com/spreadsheets/d/129hfdDSgPnvrEAyN5hjny8pip_P3iDjMykSg2Vi7Bzs` (gid 0).
+
+**Kenapa ditulis ulang:** sheet memakai **dua blok dengan kolom berbeda** — kiri
+(`No|Nama|Jabatan|Steam hex|ID DISCORD|Status`) dan kanan (`No|Nama|Jabatan|PJ|Status`, tanpa hex).
+Script lama menganggap keduanya sama, sehingga "Status" blok kiri terbaca sebagai ID Discord dan
+"PJ" blok kanan terbaca sebagai hex. Script lama juga **hanya menambah** (nama yang sudah ada
+dilewati), jadi tidak pernah memperbarui apa pun.
+
+**Kemampuan baru**
+
+| Perintah | Arti |
+|---|---|
+| `node scripts/import-sheet.mjs` | simulasi, tidak menulis apa pun |
+| `... --apply` | buat yang baru + perbarui jabatan/status/hex/ID Discord yang berbeda |
+| `... --apply --prune` | + **hapus** anggota yang tidak ada di sheet (database jadi = sheet) |
+| `... --force` | tetap buat walau namanya mirip anggota lain |
+
+- Normalisasi: `steam:` didahulukan, spasi dibuang (`steam: 1100…` → `steam:1100…`), ID Discord
+  diambil digitnya saja, `Sepuh/OG` dikenali sebagai `OG`.
+- Hex / ID Discord dobel di dalam sheet: yang pertama dipakai, sisanya dikosongkan + dicatat.
+- Nama beda ejaan (`ANAXKYY` vs `ANAXKY (ZAKYY)`, `MEIO RAY (JONO)` vs `MEIO RAY`) dicocokkan,
+  tidak dibuat duplikat. `--prune` memakai penanda "sudah tercocokkan", bukan nama, supaya
+  orang yang cocok sebagian tidak ikut terhapus.
+- Status & jabatan selalu dikirim bersamaan, jadi aturan otomatis "turun jabatan → DITURUNKAN"
+  di `updateMember` tidak ikut menimpa status dari sheet.
+
+**Hasil 16 Nov 2026** (backup dulu: `CT\backup-centralt-20261116-1849.sql`):
+
+| | |
+|---|---|
+| Dibuat | 2 — LEONARDO DAVINCI, GLOW GLOWY KINGSTON |
+| Diperbarui | 51 (hex/ID Discord terisi, status, pindah jabatan) |
+| Dihapus (`--prune`) | 12 anggota yang tidak ada di sheet |
+| Total akhir | **55 anggota** = sheet: OG 2, UNDER OG 2, BIG HOMIES 14, HOMIES 28, LIL HOMIES 9, TAMU 0 |
+| Hex / ID Discord terisi | 45 / 45 |
+
+**Efek samping:** 5 baris WD dan 12 peserta kegiatan yang dulu menunjuk anggota yang dihapus
+sekarang `member_id = NULL` (relasi `onDelete: SetNull`) — transaksi/kegiatannya tetap ada,
+hanya tautan ke anggotanya kosong.
+
+**Verifikasi:** run kedua `--apply --prune` → `baru 0 · diperbarui 0 · tetap 55` (idempoten);
+tidak ada nama duplikat; `/anggota` menampilkan 55 anggota.
+
+### Koreksi kepemilikan hex & ID Discord (16 Nov 2026)
+
+Sheet baris 19 (`EXXEL OSAZE C VERHOVEN`) dan baris 38 (`CECILLIA ZEE VERHOEVEN`) memuat
+**Steam Hex dan ID Discord yang sama**: `steam:11000016c97015a` / `1311703875488841858`.
+Karena `hex` dan `discord_id` **UNIQUE**, importer hanya menyimpan yang pertama (Exxel) dan
+mengosongkan yang kedua — itu sebabnya Cecillia tampil `—` di bot.
+
+Dicek langsung ke Discord API (`GET /guilds/{guild}/members/1311703875488841858`): ID itu milik
+**CT - CECILZ** (`only.cecilz`) — jadi data tersebut **milik Cecillia**, dan baris Exxel yang salah.
+
+| Anggota | Sebelum | Sesudah |
+|---|---|---|
+| CECILLIA ZEE VERHOEVEN | `—` / `—` | `steam:11000016c97015a` / `1311703875488841858` |
+| EXXEL OSAZE C VERHOVEN | `steam:11000016c97015a` / `1311703875488841858` | `—` / `—` (menunggu data asli) |
+
+**Yang masih harus dilakukan di sheet:** kosongkan kolom Steam hex & ID DISCORD di **baris 19**
+(Exxel). Selama belum, setiap sync akan mencoba memberi data Cecillia ke Exxel dan gagal
+(409 `Steam Hex sudah dipakai`) — data database tetap benar, hanya laporan sync yang gagal 1 baris.
+
+---
+
+## 13. Pengingat "PENGEMBALIAN TERLAMBAT" dimatikan (16 Nov 2026)
+
+Pengingat otomatis di channel WD dihentikan dan pesan yang sudah terkirim dibersihkan.
+
+**Cara mematikan** — flag `WD_REMINDER_ENABLED`, default **mati**:
+
+| Berkas | Perubahan |
+|---|---|
+| `.env` | `WD_REMINDER_ENABLED=0` |
+| `docker-compose.yml` | bot: `WD_REMINDER_ENABLED: ${WD_REMINDER_ENABLED:-0}` |
+| `bot/src/index.js` | pemanggilan awal & `setInterval` 30 menit hanya jalan bila flag `= 1`; log `[wd] pengingat terlambat nonaktif` |
+| `bot/src/wd.js` | `doRemind()` langsung `return` bila flag bukan `1` (pengaman lapis kedua) |
+
+**Yang TIDAK diubah:** fitur tenggat 3 hari tetap ada — kolom **Tenggat** di `/wd`, tanda ⚠️ di
+`/wd daftar` & `/wd cari`, keterangan terlambat di modal kembali, serta endpoint
+`POST /api/wd/[id]/reminder` dan kolom `reminder_at`. Yang dimatikan hanya **pesan otomatis**
+ke channel WD. Untuk menghidupkan lagi: set `WD_REMINDER_ENABLED=1` lalu rebuild bot.
+
+**Pembersihan pesan:** 30 notif `⚠️ PENGEMBALIAN TERLAMBAT` dihapus lewat Discord API
+(`DELETE /channels/{id}/messages/{id}`, 3 kena rate limit lalu diulang). Hasil akhir: channel WD
+**0 pesan dari bot**, 17 pesan anggota tersisa. Kartu WD tidak ada yang terhapus (saat itu channel
+memang tidak berisi kartu).
+
+**Verifikasi:** `docker exec central-t-bot printenv WD_REMINDER_ENABLED` → `0`; log bot memuat
+`[wd] pengingat terlambat nonaktif (WD_REMINDER_ENABLED != 1)`; struktur Discord tetap
+diperbarui (fitur lain tidak terganggu).
+
+---
+
+## 14. Tampilan embed struktur Discord dirapikan (16 Nov 2026)
+
+Embed `/struktur` lama sulit dibaca: satu anggota ditulis satu baris
+(`🟢 **NAMA** — \`hex\` — \`18-digit\``) sehingga entri panjang **melipat di tengah**
+(contoh: `EXXEL OSAZE C VERHOVEN — steam:… —` lalu ID-nya jatuh ke baris berikutnya), status hanya
+berupa warna, dan header cuma "Total 55 anggota" + legenda tanpa angka.
+
+**Aturan desain yang dipakai** (dari `ui-ux-pro-max`): jangan sampaikan info lewat warna saja
+(High), dan jangan biarkan token panjang memaksa wrap/overflow (High).
+
+**Bentuk akhir** — tabel monospace satu baris per anggota di dalam blok kode:
+emoji status, nama, lalu `| steam:hex | id`. Nomor urut tidak dipakai.
+
+```
+🟢 ESER EX MACHINA        | steam:110000146b0a811 | 832905294383415297
+⚫ ALFA ROMEO             | steam:11000015a41252d | 1324095888355754015
+```
+
+**Soal lebar:** satu baris ini **70 karakter**. Muat selama jendela Discord cukup lebar
+(±900px pada zoom 100%); di jendela sempit ID akan terdorong ke baris sendiri. Kalau itu terjadi,
+pilihannya: lebarkan/zoom-out jendela, atau kembali ke varian dua baris (nama di baris 1,
+`hex | id` di baris 2, total 43 karakter) — riwayat perubahan ini ada di git.
+
+Format dibuat di `bot/src/struktur-format.js` (modul murni, tanpa `discord.js`, supaya bisa diuji
+lokal); `bot/src/struktur.js` hanya mengurus kirim/edit pesan.
+
+| Hal | Sebelum | Sesudah |
+|---|---|---|
+| Satu anggota | 2 baris (nama+status, lalu hex+ID) | **1 baris**: `🟢 NAMA \| steam:hex \| id` |
+| Status per anggota | kata (`— Aktif`) | emoji saja (🟢 ⚫ 🔴 ⚪) + jumlah per status di header |
+| Nomor urut | 1–55 | tidak dipakai |
+| Lebar baris | 43 karakter (2 baris) | **70 karakter** (1 baris) |
+| Kolom | rata | rata (blok kode + monospace, nama di-pad) |
+| Hex kosong / ID kosong | diisi `—` | diisi `—` |
+| Header | "Total 55 anggota" + 4 titik warna | `**55 anggota** · 6 jabatan` + jumlah per status (38 / 17 / 0 / 0) |
+| Judul seksi | `OG (2)` | `OG — 2 anggota` |
+| Jumlah pesan | 3 pesan | **1 pesan, 7 embed** |
+
+Anggota tidak pernah terbelah antar-embed (batas 3800 karakter/embed, 5500/pesan). Jabatan kosong
+ditulis `(belum ada anggota)`.
+
+**Verifikasi (16 Nov 2026):** `node --check` OK; bot di-rebuild; dibaca ulang lewat Discord API →
+1 pesan, 7 embed, 56 baris, lebar 70–71 karakter, footer `CT-STRUKTUR • 1/1` utuh sehingga
+edit-in-place tetap jalan.
+
