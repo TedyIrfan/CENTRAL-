@@ -560,3 +560,30 @@ Baris riwayat menampilkan waktu (WIB), aksi, nama anggota, perubahan per field
 **Beda dengan log channel Discord:** `LOG_CHANNEL_ID` masih kosong — riwayat ini tersimpan di
 database dan tampil di web, bukan dikirim sebagai pesan ke channel log.
 
+---
+
+## 16. Pagar akses CRUD di channel struktur (16 Nov 2026)
+
+Aksi **menulis** (TAMBAH / UBAH / NAIK / TURUN / HAPUS lewat format chat) di channel struktur
+sekarang hanya untuk **BIG HOMIES** atau **Administrator / Manage Server**.
+
+| Hal | Sebelum | Sesudah |
+|---|---|---|
+| Role BIG HOMIES | boleh | boleh |
+| Administrator / Manage Server | boleh | boleh |
+| User di `ALLOWED_USER_IDS` | boleh (bypass) | **tidak berlaku** di channel ini |
+| Membaca / melihat struktur | bebas | **tetap bebas** (tidak ada pagar kode) |
+
+- Aturannya ada di `bot/src/access.js` (`canEditStruktur`), fungsi murni tanpa `discord.js`
+  supaya bisa diuji: `node bot/test-access.mjs` (7 kasus, semua lolos).
+- `bot/src/index.js` memakai pagar itu khusus untuk `handleRegistrationMessage`
+  (`isStrukturEditor`); alur lain (kegiatan, WD, slash command) tetap memakai `isAllowedMember`.
+- Role yang dipakai = `ALLOWED_ROLE_IDS`. Diverifikasi lewat Discord API:
+  `1541988598717354105` = **"BIG HOMIES"**.
+- Menolak akses tetap seperti sebelumnya: reaksi ⛔ (tanpa pesan tambahan, supaya channel tidak
+  dipenuhi balasan).
+
+**Catatan:** slash command global (`/anggota tambah`, `/anggota hapus`, dst.) **masih** memakai
+pagar lama (`ALLOWED_USER_IDS` + role + admin). Kalau mau slash command juga BIG HOMIES-only,
+bilang — satu baris perubahan.
+

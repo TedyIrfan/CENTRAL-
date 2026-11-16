@@ -7,6 +7,7 @@ import {
   PermissionFlagsBits,
 } from "discord.js";
 import { actorOf, api, describeError, UserError } from "./api.js";
+import { canEditStruktur } from "./access.js";
 import { CONTEXT_ADD_NAME, commands } from "./commands.js";
 import { handleAddButton, handleContextAdd } from "./tambah.js";
 import { buildDeleteConfirm, handleDeleteButton } from "./hapus.js";
@@ -58,8 +59,7 @@ if (!kegiatanChannelId()) {
 const intents = [GatewayIntentBits.Guilds];
 if (DAFTAR_CHANNEL_ID || kegiatanChannelId() || wdChannelId()) {
   intents.push(GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent);
-  if (DAFTAR_CHANNEL_ID) console.log(`[daftar] auto-daftar aktif di channel ${DAFTAR_CHANNEL_ID}`);
-  if (kegiatanChannelId()) console.log(`[kegiatan] channel kegiatan ${kegiatanChannelId()}`);
+  if (DAFTAR_CHANNEL_ID) console.log(`[daftar] auto-daftar aktif di channel ${DAFTAR_CHANNEL_ID}`);  if (kegiatanChannelId()) console.log(`[kegiatan] channel kegiatan ${kegiatanChannelId()}`);
   if (wdChannelId()) console.log(`[wd] auto-catat WD di channel ${wdChannelId()}`);
 }
 
@@ -81,6 +81,22 @@ function isAllowedMember(member) {
   if (perms?.has(PermissionFlagsBits.Administrator) || perms?.has(PermissionFlagsBits.ManageGuild)) return true;
   const roles = member.roles?.cache;
   return Boolean(roles && ALLOWED_ROLES.some((id) => roles.has(id)));
+}
+
+/**
+ * Pagar khusus aksi tulis di channel struktur: hanya role ALLOWED_ROLE_IDS (BIG HOMIES)
+ * atau Administrator/Manage Server. Berbeda dari isAllowedMember, daftar ALLOWED_USER_IDS
+ * tidak berlaku di sini.
+ */
+function isStrukturEditor(member) {
+  return canEditStruktur(
+    {
+      isAdmin: member?.permissions?.has(PermissionFlagsBits.Administrator),
+      isManageGuild: member?.permissions?.has(PermissionFlagsBits.ManageGuild),
+      roleIds: member?.roles?.cache ? [...member.roles.cache.keys()] : [],
+    },
+    ALLOWED_ROLES,
+  );
 }
 
 
@@ -482,7 +498,9 @@ client.on(Events.MessageCreate, async (message) => {
   if (message.channelId !== DAFTAR_CHANNEL_ID) return;
   try {
     await handleRegistrationMessage(message, {
-      isAllowedMember,
+      // Channel struktur memakai pagar lebih ketat: role BIG HOMIES atau Administrator.
+      // ALLOWED_USER_IDS sengaja tidak berlaku di sini (lihat bot/src/access.js).
+      isAllowedMember: isStrukturEditor,
       refreshStruktur: () => refreshStruktur(client),
     });
   } catch (err) {
