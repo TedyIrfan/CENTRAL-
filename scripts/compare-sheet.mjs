@@ -17,7 +17,6 @@ const POSITION_MAP = {
   "big homies": "BIG HOMIES",
   homies: "HOMIES",
   "lil homies": "LIL HOMIES",
-  tamu: "TAMU",
 };
 const STATUS_MAP = {
   aktif: "AKTIF",

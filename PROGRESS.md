@@ -443,6 +443,16 @@ Embed struktur juga sudah menampilkan
 (nama, jabatan, status, hex, ID Discord) dan keluar dengan kode 1 bila ada selisih — dipakai
 untuk memastikan angka 55/55 di atas.
 
+### Jabatan TAMU dihapus (16 Nov 2026)
+
+Jabatan **TAMU** (id 15) dihapus dari database atas permintaan pemilik: anggotanya 0, jadi tidak
+ada data yang hilang. Jabatan yang tersisa **5**: OG, UNDER OG, BIG HOMIES, HOMIES, LIL HOMIES.
+
+- `scripts/import-sheet.mjs` dan `scripts/compare-sheet.mjs` tidak lagi mengenal `tamu`. Kalau
+  suatu saat sheet memuat baris berjabatan TAMU, baris itu **dilewati** dengan laporan
+  `jabatan tidak dikenal "Tamu" ... -> dilewati`, bukan membuat jabatannya kembali.
+- Embed struktur sekarang 6 kartu (header + 5 jabatan); kartu `TAMU — 0 anggota` hilang.
+
 ---
 
 ## 13. Pengingat "PENGEMBALIAN TERLAMBAT" dimatikan (16 Nov 2026)
