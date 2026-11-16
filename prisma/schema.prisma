@@ -143,3 +143,34 @@ model VaultItem {
   @@map("vault_items")
 }
 
+enum AuditSource {
+  WEB
+  DISCORD
+}
+
+enum MemberAuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  PROMOTE
+  DEMOTE
+}
+
+/// Jejak perubahan anggota: siapa (bot Discord / web), kapan, dan apa yang berubah.
+/// Sengaja tidak memakai relasi ke Member supaya riwayat tetap ada setelah anggotanya dihapus.
+model MemberAudit {
+  id         Int               @id @default(autoincrement())
+  memberId   Int?              @map("member_id")
+  memberName String            @map("member_name")
+  action     MemberAuditAction
+  source     AuditSource       @default(WEB)
+  actorId    String?           @map("actor_id")
+  actorName  String?           @map("actor_name")
+  changes    Json?
+  createdAt  DateTime          @default(now()) @map("created_at")
+
+  @@index([memberId])
+  @@index([createdAt])
+  @@map("member_audits")
+}
+

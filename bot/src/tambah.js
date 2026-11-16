@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } from "discord.js";
-import { api, describeError, UserError } from "./api.js";
+import { actorOf, api, describeError, UserError } from "./api.js";
 import { escapeMd } from "./format.js";
 
 const PENDING_TTL_MS = 10 * 60_000;
@@ -226,13 +226,14 @@ export async function handleContextAdd(interaction) {
   }
 }
 
-async function addOne(item, positionId) {
+async function addOne(item, positionId, actor) {
   const dupes = await api(`/api/members?search=${encodeURIComponent(item.name)}&pageSize=10`);
   const same = dupes.data.find((m) => m.name.toLowerCase() === item.name.toLowerCase());
   if (same) throw new UserError(`sudah ada (${same.position.name})`);
 
   const { data } = await api("/api/members", {
     method: "POST",
+    actor,
     body: {
       name: item.name,
       positionId,
@@ -275,7 +276,7 @@ export async function handleAddButton(interaction, deps) {
       continue;
     }
     try {
-      added.push(await addOne(item, positionId));
+      added.push(await addOne(item, positionId, actorOf(interaction.user, interaction.member?.displayName)));
     } catch (err) {
       failed.push(`${escapeMd(item.name)}: ${err instanceof UserError ? err.message : describeError(err)}`);
     }

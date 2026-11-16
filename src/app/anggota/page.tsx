@@ -9,6 +9,7 @@ import {
   type PositionGroup,
 } from "@/lib/types";
 import { MemberForm, type EditingMember } from "@/components/member-form";
+import { AuditHistory } from "@/components/audit-history";
 import { Modal } from "@/components/modal";
 import {
   Button,
@@ -28,6 +29,7 @@ import {
 import {
   IconArrowDown,
   IconArrowUp,
+  IconClock,
   IconCopy,
   IconPencil,
   IconPlus,
@@ -53,6 +55,14 @@ export default function MembersPage() {
   const [form, setForm] = useState<FormState>(null);
   const [deleting, setDeleting] = useState<GroupMember | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [history, setHistory] = useState<{ memberId?: number; name?: string } | null>(null);
+
+  // Bisa dibuka lewat tautan: /anggota?riwayat=1 atau /anggota?riwayat=<memberId>.
+  useEffect(() => {
+    const param = new URLSearchParams(window.location.search).get("riwayat");
+    if (param === null) return;
+    setHistory(/^\d+$/.test(param) ? { memberId: Number(param) } : {});
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => setSearch(searchInput), 250);
@@ -135,15 +145,20 @@ export default function MembersPage() {
             : `${total} anggota${filtering || positionId ? " (terfilter)" : ""}`
         }
         actions={
-          <Button
-            variant="primary"
-            onClick={() =>
-              setForm({ defaultPositionId: positionId ? Number(positionId) : undefined })
-            }
-            disabled={positions.length === 0}
-          >
-            <IconPlus /> Anggota
-          </Button>
+          <>
+            <Button onClick={() => setHistory({})}>
+              <IconClock size={14} /> Riwayat
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() =>
+                setForm({ defaultPositionId: positionId ? Number(positionId) : undefined })
+              }
+              disabled={positions.length === 0}
+            >
+              <IconPlus /> Anggota
+            </Button>
+          </>
         }
       />
 
@@ -286,6 +301,12 @@ export default function MembersPage() {
                               <IconPencil size={14} />
                             </IconButton>
                             <IconButton
+                              label={`Riwayat ${m.name}`}
+                              onClick={() => setHistory({ memberId: m.id, name: m.name })}
+                            >
+                              <IconClock size={14} />
+                            </IconButton>
+                            <IconButton
                               label="Hapus anggota"
                               tone="danger"
                               onClick={() => setDeleting(m)}
@@ -314,6 +335,14 @@ export default function MembersPage() {
             setForm(null);
             load();
           }}
+        />
+      )}
+
+      {history && (
+        <AuditHistory
+          memberId={history.memberId}
+          memberName={history.name}
+          onClose={() => setHistory(null)}
         />
       )}
 

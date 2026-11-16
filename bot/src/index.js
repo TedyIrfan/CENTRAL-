@@ -6,7 +6,7 @@ import {
   MessageFlags,
   PermissionFlagsBits,
 } from "discord.js";
-import { api, describeError, UserError } from "./api.js";
+import { actorOf, api, describeError, UserError } from "./api.js";
 import { CONTEXT_ADD_NAME, commands } from "./commands.js";
 import { handleAddButton, handleContextAdd } from "./tambah.js";
 import { buildDeleteConfirm, handleDeleteButton } from "./hapus.js";
@@ -140,6 +140,8 @@ async function sendLog(interaction, description) {
 
 async function handleAnggota(interaction) {
   const sub = interaction.options.getSubcommand();
+  // Dipakai semua mutasi di bawah supaya riwayat di web mencatat pelakunya.
+  const actor = actorOf(interaction.user, interaction.member?.displayName);
 
   if (sub === "cari") {
     const q = interaction.options.getString("nama", true);
@@ -180,7 +182,7 @@ async function handleAnggota(interaction) {
     const status = interaction.options.getString("status");
     if (hex) body.hex = hex;
     if (status) body.status = status;
-    const { data } = await api("/api/members", { method: "POST", body });
+    const { data } = await api("/api/members", { method: "POST", body, actor });
     await sendLog(interaction, `➕ **${escapeMd(data.name)}** ditambahkan ke **${data.position.name}**`);
     return { reply: { embeds: [memberEmbed(data, "Anggota ditambahkan")] } };
   }
@@ -201,7 +203,7 @@ async function handleAnggota(interaction) {
     if (Object.keys(body).length === 0) {
       throw new UserError("Isi minimal satu kolom yang mau diubah: nama_baru, hex, discord, atau status.");
     }
-    const { data } = await api(`/api/members/${id}`, { method: "PATCH", body });
+    const { data } = await api(`/api/members/${id}`, { method: "PATCH", body, actor });
     await sendLog(interaction, `✏️ **${escapeMd(data.name)}** diperbarui`);
     return { reply: { embeds: [memberEmbed(data, "Data anggota diperbarui")] } };
   }
@@ -213,7 +215,7 @@ async function handleAnggota(interaction) {
     if (before.position.id === positionId) {
       throw new UserError(`"${before.name}" sudah di jabatan ${before.position.name}.`);
     }
-    const { data } = await api(`/api/members/${id}`, { method: "PATCH", body: { positionId } });
+    const { data } = await api(`/api/members/${id}`, { method: "PATCH", body: { positionId }, actor });
     await sendLog(
       interaction,
       `↔️ **${escapeMd(data.name)}** pindah dari **${before.position.name}** ke **${data.position.name}** (status ${data.status})`,
@@ -230,7 +232,7 @@ async function handleAnggota(interaction) {
   const id = await resolveMemberId(interaction.options.getString("nama", true));
 
   if (sub === "naik" || sub === "turun") {
-    const { data } = await api(`/api/members/${id}/${sub === "naik" ? "promote" : "demote"}`, { method: "POST" });
+    const { data } = await api(`/api/members/${id}/${sub === "naik" ? "promote" : "demote"}`, { method: "POST", actor });
     const icon = sub === "naik" ? "▲" : "▼";
     const verb = sub === "naik" ? "naik" : "turun";
     await sendLog(
@@ -245,6 +247,7 @@ async function handleAnggota(interaction) {
     const { data } = await api(`/api/members/${id}`, {
       method: "PATCH",
       body: { status: interaction.options.getString("status", true) },
+      actor,
     });
     const moved = data.position.id !== before.position.id;
     await sendLog(
@@ -260,6 +263,7 @@ async function handleAnggota(interaction) {
     const { data } = await api(`/api/members/${id}`, {
       method: "PATCH",
       body: { hex: raw === "-" ? null : raw },
+      actor,
     });
     await sendLog(interaction, `🆔 Steam Hex **${escapeMd(data.name)}** diperbarui`);
     return { reply: { embeds: [memberEmbed(data, "Steam Hex diperbarui")] } };

@@ -1,5 +1,5 @@
 import { escapeMd } from "./format.js";
-import { api, ApiError, UserError } from "./api.js";
+import { actorOf, api, ApiError, UserError } from "./api.js";
 import { buildDeleteConfirm } from "./hapus.js";
 import { buildItem, parseRegistrations } from "./tambah.js";
 
@@ -132,6 +132,7 @@ async function handleTambah(blocks, message, deps) {
     try {
       const { data } = await api("/api/members", {
         method: "POST",
+        actor: actorOf(message.author, message.member?.displayName),
         body: {
           name: item.name,
           positionId: position.id,
@@ -206,7 +207,11 @@ async function handleUbah(block, message, deps) {
     );
   }
 
-  const { data } = await api(`/api/members/${member.id}`, { method: "PATCH", body });
+  const { data } = await api(`/api/members/${member.id}`, {
+    method: "PATCH",
+    body,
+    actor: actorOf(message.author, message.member?.displayName),
+  });
   deps.refreshStruktur();
   console.log(`[daftar] UBAH ${data.name} oleh ${message.author.username}`);
 }
@@ -241,6 +246,7 @@ async function handleNaikTurun(action, block, message, deps) {
     const { data } = await api(`/api/members/${member.id}`, {
       method: "PATCH",
       body: { positionId: target.id },
+      actor: actorOf(message.author, message.member?.displayName),
     });
     deps.refreshStruktur();
     console.log(
@@ -251,6 +257,7 @@ async function handleNaikTurun(action, block, message, deps) {
 
   const { data } = await api(`/api/members/${member.id}/${action === "NAIK" ? "promote" : "demote"}`, {
     method: "POST",
+    actor: actorOf(message.author, message.member?.displayName),
   });
   deps.refreshStruktur();
   console.log(

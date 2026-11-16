@@ -510,3 +510,53 @@ ditulis `(belum ada anggota)`.
 1 pesan, 7 embed, 56 baris, lebar 70–71 karakter, footer `CT-STRUKTUR • 1/1` utuh sehingga
 edit-in-place tetap jalan.
 
+---
+
+## 15. Riwayat perubahan anggota (audit) — 16 Nov 2026
+
+Sebelumnya tidak ada jejak siapa mengubah apa (§6.1 poin 1): bot & web tanpa login. Sekarang setiap
+perubahan anggota dicatat ke database dan bisa dilihat di halaman **`/anggota`**.
+
+**Data** — tabel `member_audits` (migrasi `20261116190000_add_member_audits`):
+
+| Kolom | Isi |
+|---|---|
+| `member_id`, `member_name` | id anggota (NULL kalau sudah dihapus) + nama saat itu |
+| `action` | `CREATE` / `UPDATE` / `DELETE` / `PROMOTE` / `DEMOTE` |
+| `source` | `WEB` atau `DISCORD` |
+| `actor_id`, `actor_name` | pelaku (diisi bot; kosong untuk web) |
+| `changes` | JSON `{ field: { from, to } }` — field: nama, jabatan, status, hex, discord |
+
+Tidak memakai relasi ke `Member`, jadi riwayat **tetap ada setelah anggotanya dihapus**.
+
+**Cara bot memperkenalkan dirinya.** Tidak ada login, jadi bot mengirim identitas lewat header pada
+setiap mutasi anggota (`bot/src/api.js` → `actorOf()`):
+
+```
+x-actor-source: discord
+x-actor-id: 994798708812161055
+x-actor-name: <nama tampilan, URL-encoded>
+```
+
+`src/lib/audit.ts` (`actorFromRequest`) membacanya; tanpa header itu perubahan dianggap dari web.
+Titik yang sudah mengirim identitas: `/anggota` tambah/ubah/pindah/naik/turun/status/hex
+(`bot/src/index.js`), tombol tambah & menu klik-kanan (`tambah.js`), hapus (`hapus.js`),
+auto-daftar dari chat (`daftar.js`).
+
+**Tampilan** — `src/components/audit-history.tsx`, dibuka dari `/anggota`:
+- tombol **Riwayat** di kanan atas → 60 perubahan terakhir semua anggota;
+- ikon jam di tiap baris → riwayat anggota itu saja;
+- bisa ditautkan: `/anggota?riwayat=all` (semua) atau `/anggota?riwayat=<memberId>`.
+
+Baris riwayat menampilkan waktu (WIB), aksi, nama anggota, perubahan per field
+(`Status: Aktif → Tidak Aktif`), dan pelaku (`Uji Riwayat`, `Web`, dst).
+
+**Verifikasi (16 Nov 2026):** dibuat anggota uji lewat API dengan header bot → tercatat
+`CREATE · DISCORD · CT - Irfan`; diubah tanpa header → `UPDATE · WEB`; naik jabatan dari bot →
+`PROMOTE · DISCORD · LIL HOMIES → HOMIES`; dihapus → `DELETE · WEB` dengan member_id NULL.
+`tsc --noEmit` bersih, semua file bot lolos `node --check`, UI dicek lewat screenshot
+`/anggota?riwayat=all`. Baris uji sudah dihapus, jadi riwayat mulai kosong.
+
+**Beda dengan log channel Discord:** `LOG_CHANNEL_ID` masih kosong — riwayat ini tersimpan di
+database dan tampil di web, bukan dikirim sebagai pesan ke channel log.
+

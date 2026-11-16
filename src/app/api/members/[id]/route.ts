@@ -1,3 +1,4 @@
+import { actorFromRequest } from "@/lib/audit";
 import { handleError, parseId, readJson } from "@/lib/errors";
 import { deleteMember, getMember, updateMember } from "@/lib/members";
 
@@ -15,16 +16,18 @@ export async function GET(_request: Request, { params }: Ctx) {
 export async function PATCH(request: Request, { params }: Ctx) {
   try {
     const id = parseId((await params).id);
-    return Response.json({ data: await updateMember(id, await readJson(request)) });
+    return Response.json({
+      data: await updateMember(id, await readJson(request), actorFromRequest(request)),
+    });
   } catch (err) {
     return handleError(err);
   }
 }
 
-export async function DELETE(_request: Request, { params }: Ctx) {
+export async function DELETE(request: Request, { params }: Ctx) {
   try {
     const id = parseId((await params).id);
-    return Response.json({ data: await deleteMember(id) });
+    return Response.json({ data: await deleteMember(id, actorFromRequest(request)) });
   } catch (err) {
     return handleError(err);
   }

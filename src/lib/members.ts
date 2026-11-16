@@ -1,6 +1,7 @@
 import { MemberStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/errors";
+import { WEB_ACTOR, recordMemberAudit, type Actor, type FieldChange } from "@/lib/audit";
 
 const MAX_NAME = 100;
 
@@ -265,7 +266,7 @@ export async function getMember(id: number) {
 
 // ---------- mutasi ----------
 
-export async function createMember(input: Record<string, unknown>) {
+export async function createMember(input: Record<string, unknown>, actor: Actor = WEB_ACTOR) {
   const errors: Fields = {};
   const name = parseName(input.name, errors);
   const positionId = parsePositionId(input.positionId, errors);
@@ -292,10 +293,26 @@ export async function createMember(input: Record<string, unknown>) {
     },
     include,
   });
+  await recordMemberAudit({
+    memberId: row.id,
+    memberName: row.name,
+    action: "CREATE",
+    actor,
+    changes: {
+      jabatan: { from: null, to: row.position.name },
+      status: { from: null, to: row.status },
+      ...(row.hex ? { hex: { from: null, to: row.hex } } : {}),
+      ...(row.discordId ? { discord: { from: null, to: row.discordId } } : {}),
+    },
+  });
   return serialize(row);
 }
 
-export async function updateMember(id: number, input: Record<string, unknown>) {
+export async function updateMember(
+  id: number,
+  input: Record<string, unknown>,
+  actor: Actor = WEB_ACTOR,
+) {
   const current = await prisma.member.findUnique({ where: { id }, include });
   if (!current) throw new ApiError(404, "Anggota tidak ditemukan");
 
@@ -347,11 +364,31 @@ export async function updateMember(id: number, input: Record<string, unknown>) {
   }
 
   const row = await prisma.member.update({ where: { id }, data, include });
+
+  const changes: Record<string, FieldChange> = {};
+  if (current.name !== row.name) changes.nama = { from: current.name, to: row.name };
+  if (current.position.name !== row.position.name) {
+    changes.jabatan = { from: current.position.name, to: row.position.name };
+  }
+  if (current.status !== row.status) changes.status = { from: current.status, to: row.status };
+  if ((current.hex ?? null) !== (row.hex ?? null)) changes.hex = { from: current.hex, to: row.hex };
+  if ((current.discordId ?? null) !== (row.discordId ?? null)) {
+    changes.discord = { from: current.discordId, to: row.discordId };
+  }
+  if (Object.keys(changes).length > 0) {
+    await recordMemberAudit({
+      memberId: row.id,
+      memberName: row.name,
+      action: "UPDATE",
+      actor,
+      changes,
+    });
+  }
   return serialize(row);
 }
 
-export async function demoteMember(id: number) {
-  return prisma.$transaction(async (tx) => {
+export async function demoteMember(id: number, actor: Actor = WEB_ACTOR) {
+  const result = await prisma.$transaction(async (tx) => {
     const current = await tx.member.findUnique({ where: { id }, include });
     if (!current) throw new ApiError(404, "Anggota tidak ditemukan");
     const next = await adjacentPosition(tx, current.position.sortOrder, "down");
@@ -365,10 +402,21 @@ export async function demoteMember(id: number) {
     });
     return { ...serialize(row), previousPosition: current.position.name };
   });
+  await recordMemberAudit({
+    memberId: result.id,
+    memberName: result.name,
+    action: "DEMOTE",
+    actor,
+    changes: {
+      jabatan: { from: result.previousPosition, to: result.position.name },
+      status: { from: null, to: result.status },
+    },
+  });
+  return result;
 }
 
-export async function promoteMember(id: number) {
-  return prisma.$transaction(async (tx) => {
+export async function promoteMember(id: number, actor: Actor = WEB_ACTOR) {
+  const result = await prisma.$transaction(async (tx) => {
     const current = await tx.member.findUnique({ where: { id }, include });
     if (!current) throw new ApiError(404, "Anggota tidak ditemukan");
     const next = await adjacentPosition(tx, current.position.sortOrder, "up");
@@ -385,10 +433,31 @@ export async function promoteMember(id: number) {
     });
     return { ...serialize(row), previousPosition: current.position.name };
   });
+  await recordMemberAudit({
+    memberId: result.id,
+    memberName: result.name,
+    action: "PROMOTE",
+    actor,
+    changes: {
+      jabatan: { from: result.previousPosition, to: result.position.name },
+      status: { from: null, to: result.status },
+    },
+  });
+  return result;
 }
 
-export async function deleteMember(id: number) {
+export async function deleteMember(id: number, actor: Actor = WEB_ACTOR) {
   const m = await getMember(id);
   await prisma.member.delete({ where: { id } });
+  await recordMemberAudit({
+    memberId: null, // anggota sudah tidak ada; simpan nama & jabatan terakhirnya
+    memberName: m.name,
+    action: "DELETE",
+    actor,
+    changes: {
+      jabatan: { from: m.position.name, to: null },
+      status: { from: m.status, to: null },
+    },
+  });
   return { id, name: m.name };
 }

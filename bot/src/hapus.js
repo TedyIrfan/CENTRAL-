@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } from "discord.js";
-import { api, describeError } from "./api.js";
+import { actorOf, api, describeError } from "./api.js";
 import { escapeMd } from "./format.js";
 
 const PENDING_TTL_MS = 2 * 60_000;
@@ -71,7 +71,10 @@ export async function handleDeleteButton(interaction, deps) {
   await interaction.update({ content: "⏳ Menghapus…", embeds: [], components: [] });
 
   try {
-    const { data } = await api(`/api/members/${entry.memberId}`, { method: "DELETE" });
+    const { data } = await api(`/api/members/${entry.memberId}`, {
+      method: "DELETE",
+      actor: actorOf(interaction.user, interaction.member?.displayName),
+    });
     await interaction.editReply({
       embeds: [
         new EmbedBuilder()
