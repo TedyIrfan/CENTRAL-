@@ -406,6 +406,34 @@ Dicek langsung ke Discord API (`GET /guilds/{guild}/members/1311703875488841858`
 (Exxel). Selama belum, setiap sync akan mencoba memberi data Cecillia ke Exxel dan gagal
 (409 `Steam Hex sudah dipakai`) — data database tetap benar, hanya laporan sync yang gagal 1 baris.
 
+### Rekonsiliasi penuh sheet vs database (16 Nov 2026, sore)
+
+Sheet sudah diperbaiki pemilik: baris 19 (Exxel) kini punya hex sendiri
+(`steam:11000016f742e0e`, sebelumnya memakai hex Cecillia). Setelah disinkronkan:
+
+| Hal | Hasil |
+|---|---|
+| Nama | `MEIO RAY` di database diubah jadi **`MEIO RAY (JONO)`** agar sama dengan sheet |
+| Hex Exxel | `steam:11000016f742e0e` (hex baru dari sheet) — sudah masuk database & embed |
+| Hex/ID Cecillia | tetap miliknya: `steam:11000016c97015a` / `1311703875488841858` |
+| **Selisih tersisa** | **1 sel**: kolom ID DISCORD baris 19 (Exxel) berisi `76561199830150670` |
+
+**Kenapa sel itu tidak disalin:** angka itu bukan ID Discord, melainkan **SteamID64** yang
+dihitung dari Steam Hex Exxel sendiri — `0x11000016f742e0e` = `76561199830150670` (terbukti
+identik). Jadi kolomnya salah isi. Supaya kasus ini tidak pernah masuk database,
+`scripts/import-sheet.mjs` sekarang **mengabaikan** nilai "ID DISCORD" yang sama dengan SteamID64
+dari hex orang yang sama, dan menuliskannya di laporan:
+
+```
+baris 19: "ID DISCORD" 76561199830150670 = SteamID64 dari hex-nya, bukan ID Discord -> diabaikan (EXXEL OSAZE C VERHOVEN)
+```
+
+**Alat baru:** `node scripts/compare-sheet.mjs` membandingkan sheet vs database per field
+(nama, jabatan, status, hex, ID Discord) dan keluar dengan kode 1 bila ada selisih.
+Hasil 16 Nov 2026: `sheet: 55 baris · database: 55 anggota · cocok: 54` — selisihnya hanya sel
+SteamID64 di atas. Untuk membuat angka itu 55/55, isi kolom ID DISCORD baris 19 dengan ID Discord
+Exxel yang sebenarnya (atau kosongkan).
+
 ---
 
 ## 13. Pengingat "PENGEMBALIAN TERLAMBAT" dimatikan (16 Nov 2026)

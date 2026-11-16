@@ -160,6 +160,23 @@ rows.forEach((r, i) => {
   }
 });
 
+// Nilai "ID DISCORD" yang sebenarnya SteamID64 dari hex orang yang sama (salah kolom).
+// SteamID64 = nilai desimal dari hex tanpa awalan "steam:".
+for (const e of entries) {
+  if (!e.hex || !e.discordId) continue;
+  try {
+    const steamId64 = BigInt(`0x${e.hex.replace(/^steam:/i, "")}`).toString();
+    if (e.discordId === steamId64) {
+      problems.push(
+        `baris ${e.line}: "ID DISCORD" ${e.discordId} = SteamID64 dari hex-nya, bukan ID Discord -> diabaikan (${e.name})`,
+      );
+      e.discordId = null;
+    }
+  } catch {
+    // hex tidak bisa diparse: biarkan, sudah divalidasi di atas
+  }
+}
+
 // Hex / ID Discord dobel di dalam sheet: yang pertama dipakai, sisanya dikosongkan.
 const seenHex = new Map();
 const seenDiscord = new Map();
