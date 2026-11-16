@@ -416,23 +416,32 @@ Sheet sudah diperbaiki pemilik: baris 19 (Exxel) kini punya hex sendiri
 | Nama | `MEIO RAY` di database diubah jadi **`MEIO RAY (JONO)`** agar sama dengan sheet |
 | Hex Exxel | `steam:11000016f742e0e` (hex baru dari sheet) — sudah masuk database & embed |
 | Hex/ID Cecillia | tetap miliknya: `steam:11000016c97015a` / `1311703875488841858` |
-| **Selisih tersisa** | **1 sel**: kolom ID DISCORD baris 19 (Exxel) berisi `76561199830150670` |
+| ID Discord Exxel | `800443060466876446` — dicek lewat Discord API, pemiliknya **CT - EXXEL** (`deanlyz`) |
+| **Selisih** | **tidak ada — 55/55 sama** |
 
-**Kenapa sel itu tidak disalin:** angka itu bukan ID Discord, melainkan **SteamID64** yang
-dihitung dari Steam Hex Exxel sendiri — `0x11000016f742e0e` = `76561199830150670` (terbukti
-identik). Jadi kolomnya salah isi. Supaya kasus ini tidak pernah masuk database,
-`scripts/import-sheet.mjs` sekarang **mengabaikan** nilai "ID DISCORD" yang sama dengan SteamID64
-dari hex orang yang sama, dan menuliskannya di laporan:
+**Kasus SteamID64 (sudah beres):** sempat kolom ID DISCORD baris 19 berisi `76561199830150670`,
+yang bukan ID Discord melainkan **SteamID64** turunan hex Exxel sendiri (`0x11000016f742e0e` =
+`76561199830150670`). Nilai itu tidak disalin, dan `scripts/import-sheet.mjs` sekarang
+**mengabaikan** nilai "ID DISCORD" yang sama dengan SteamID64 dari hex orang yang sama:
 
 ```
 baris 19: "ID DISCORD" 76561199830150670 = SteamID64 dari hex-nya, bukan ID Discord -> diabaikan (EXXEL OSAZE C VERHOVEN)
 ```
 
-**Alat baru:** `node scripts/compare-sheet.mjs` membandingkan sheet vs database per field
-(nama, jabatan, status, hex, ID Discord) dan keluar dengan kode 1 bila ada selisih.
-Hasil 16 Nov 2026: `sheet: 55 baris · database: 55 anggota · cocok: 54` — selisihnya hanya sel
-SteamID64 di atas. Untuk membuat angka itu 55/55, isi kolom ID DISCORD baris 19 dengan ID Discord
-Exxel yang sebenarnya (atau kosongkan).
+Sheet lalu diperbaiki pemilik (ID asli `800443060466876446`), dan setelah disinkronkan
+hasil `node scripts/compare-sheet.mjs`:
+
+```
+sheet: 55 baris · database: 55 anggota · cocok: 55
+SEMUA DATA SAMA
+```
+
+Embed struktur juga sudah menampilkan
+`🟢 EXXEL OSAZE C VERHOVEN | steam:11000016f742e0e | 800443060466876446`.
+
+**Alat bantu:** `node scripts/compare-sheet.mjs` membandingkan sheet vs database per field
+(nama, jabatan, status, hex, ID Discord) dan keluar dengan kode 1 bila ada selisih — dipakai
+untuk memastikan angka 55/55 di atas.
 
 ---
 
